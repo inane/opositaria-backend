@@ -1,0 +1,49 @@
+schema: spec-driven
+
+context: |
+  Tech stack: Python 3.12+, uv, FastAPI, SQLAlchemy 2.0 (async), Alembic, Pydantic v2
+  Architecture: Hexagonal with vertical slicing by business module
+  Layers: Domain (entities, VOs, repos) → Application (use cases, DTOs) → Infrastructure (adapters, HTTP)
+  Auth: Email-based OTP authentication
+  Testing: pytest + pytest-asyncio (unit/integration/e2e)
+  Always use "uv run pytest", not bare "pytest" (uv ensures correct virtual environment)
+  Always use "uv run mypy src/" for type checking
+  Always use "uv run ruff check ." for linting
+  Always use "uv run ruff format ." for formatting
+  All code, comments, and documentation in English
+
+  Project guidelines (source of truth): All artifact creation and implementation
+  MUST read and follow the guidelines in .claude/skills/guidelines/:
+  - guidelines/architecture-hexagonal — layers, module structure, ports and adapters
+  - guidelines/design-principles — naming, functions, classes, error handling
+  - guidelines/testing-standards — test naming, structure, FIRST principles, mocks
+  - guidelines/xp-tdd-practices — TDD 5-step cycle, TPP, inside-out
+  - guidelines/git-strategy — feature branching, conventional commits
+
+rules:
+  proposal:
+    - Always include a Non-goals section
+    - Reference affected modules
+  specs:
+    - Write scenarios in Given/When/Then format
+    - Organize by business module matching project structure
+    - Include edge cases and error scenarios
+  design:
+    - Read .claude/skills/guidelines/architecture-hexagonal/ references before designing
+    - Map components to hexagonal layers (domain, application, infrastructure)
+    - Identify ports (domain interfaces) and adapters (infrastructure implementations)
+  tasks:
+    - Read .claude/skills/guidelines/xp-tdd-practices/ references before creating tasks
+    - Read .claude/skills/guidelines/testing-standards/ references for test types per layer
+    - Tasks with behavior (entities, use cases, services) use TDD format — RED write failing test for X → GREEN implement X → COMMIT (conventional commit) → REFACTOR
+    - Tasks without behavior (types, DTOs, config, wiring) are plain tasks without TDD format
+    - Order tasks inside-out — domain first, then application, then infrastructure
+    - Keep tasks small enough for one TDD cycle
+    - Testing strategy per layer
+    - Domain (entities, VOs, domain services) — unit tests (_test.py)
+    - Application (use cases) — unit tests with InMemoryRepositories (_test.py)
+    - Infrastructure DB/service adapters — integration tests with real DB (_integration_test.py)
+    - Infrastructure HTTP/controllers — e2e tests, full HTTP stack (_e2e_test.py)
+    - Use InMemoryRepositories for use case tests. Stubs and spies are allowed on application ports (EmailSender, TokenGenerator). Never mock without consulting Tech Lead first
+    - Always include a final validation group — run /task-validate, /task-code-review, /task-architecture-review, /task-testing-review
+    - Always include a final task — commit all changes with a conventional commit message

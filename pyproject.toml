@@ -1,0 +1,58 @@
+[project]
+name = "python-agentic-developer"
+version = "0.1.0"
+description = "Python backend with hexagonal architecture and TDD practices"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "sqlalchemy[asyncio]>=2.0.36",
+    "alembic>=1.14.0",
+    "pydantic>=2.10.0",
+    "pydantic-settings>=2.6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=6.0.0",
+    "ruff>=0.8.0",
+    "mypy>=1.13.0",
+    "httpx>=0.28.0",
+    "aiosqlite>=0.20.0",
+    "pre-commit>=4.0.0",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP", "ANN", "ARG", "C4", "EM", "ISC", "PT", "RET", "RUF", "SIM", "TRY"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["ANN"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+ignore_missing_imports = true
+exclude = ["tests/"]
+disallow_untyped_defs = true
+disallow_any_unimported = false
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["src"]
+python_files = ["*_test.py", "test_*.py"]
+markers = [
+    "unit: Unit tests (fast, no external deps)",
+    "integration: Integration tests (real DB)",
+    "e2e: End-to-end tests (full HTTP stack)",
+]
+addopts = "-v --tb=short"
