@@ -12,7 +12,6 @@ Production-ready Python backend template with hexagonal architecture and TDD pra
 
 - 🏗️ **Hexagonal architecture** with vertical slicing
 - ✅ **TDD** with unit, integration, and e2e tests
-- 🐳 **Docker ready** with docker-compose
 
 ---
 

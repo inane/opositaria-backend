@@ -7,7 +7,7 @@ Production-ready Python backend template based on hexagonal architecture and TDD
 - Python 3.12+
 - uv (dependency management)
 - FastAPI (ASGI framework)
-- SQLAlchemy + Alembic (ORM + migrations)
+- SQLAlchemy plus Alembic (ORM + migrations)
 - Pytest + pytest-asyncio (testing)
 - Ruff (lint + format)
 - MyPy (type checking)
@@ -85,7 +85,7 @@ src/
 
 OpenSpec ships four skills that codify the spec-driven workflow:
 
-- `openspec-explore` — Discovery stance. Think, ask, no artefacts written.
+- `openspec-explore` — Discovery stance. Think, ask, no artifacts written.
 - `openspec-propose` — Generate a proposal, design, specs, and tasks for a change.
 - `openspec-apply-change` — Implement the tasks of a change.
 - `openspec-archive-change` — Consolidate the change delta into the global spec.
