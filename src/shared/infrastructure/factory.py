@@ -15,7 +15,7 @@ from src.document_processing.infrastructure.repositories import (
     PostgresDocumentProcessingJobRepository,
 )
 from src.semantic_search.application.use_cases import (
-    SearchStudyDocumentsSemanticallyUseCase,
+    SemanticSearchUseCase,
 )
 from src.semantic_search.infrastructure.controllers import (
     _get_search_use_case,
@@ -84,10 +84,10 @@ def create_app() -> FastAPI:
 
     async def create_search_use_case(
         session: AsyncSession = Depends(get_db),
-    ) -> SearchStudyDocumentsSemanticallyUseCase:
+    ) -> SemanticSearchUseCase:
         search_repo = PostgresSemanticChunkSearchRepository(session)
         embedding_generator = NumpyEmbeddingGenerator()
-        return SearchStudyDocumentsSemanticallyUseCase(
+        return SemanticSearchUseCase(
             search_repository=search_repo,
             embedding_generator=embedding_generator,
         )

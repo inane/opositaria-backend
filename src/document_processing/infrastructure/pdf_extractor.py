@@ -3,8 +3,10 @@
 from pathlib import Path
 
 from pypdf import PdfReader
+from pypdf.errors import FileNotDecryptedError, PdfReadError
 
 from src.shared.infrastructure.settings import DocumentStorageSettings
+from src.study_documents.domain.entities import StudyDocumentError
 
 
 class PypdfTextExtractor:
@@ -21,12 +23,33 @@ class PypdfTextExtractor:
         if not full_path.exists():
             return None
 
-        reader = PdfReader(str(full_path))
-        texts: list[str] = []
-        for page in reader.pages:
-            text = page.extract_text()
-            if text and text.strip():
-                texts.append(text.strip())
+        try:
+            reader = PdfReader(str(full_path))
+        except FileNotDecryptedError:
+            raise StudyDocumentError(
+                "The PDF is encrypted",
+                safe=True,
+                code="encrypted_pdf",
+            )
+        except PdfReadError:
+            raise StudyDocumentError(
+                "The PDF file could not be read",
+                safe=True,
+                code="pdf_cannot_be_read",
+            )
+
+        try:
+            texts: list[str] = []
+            for page in reader.pages:
+                text = page.extract_text()
+                if text and text.strip():
+                    texts.append(text.strip())
+        except FileNotDecryptedError:
+            raise StudyDocumentError(
+                "The PDF is encrypted",
+                safe=True,
+                code="encrypted_pdf",
+            )
 
         if not texts:
             return None

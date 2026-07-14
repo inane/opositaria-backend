@@ -15,7 +15,7 @@ from src.study_documents.application.use_cases import (
     GetStudyDocumentStatusUseCase,
     UploadStudyDocumentUseCase,
 )
-from src.study_documents.domain.entities import StudyDocument, StudyDocumentError
+from src.study_documents.domain.entities import MAX_UPLOAD_SIZE_BYTES, StudyDocument, StudyDocumentError
 from src.study_documents.domain.repositories import InMemoryStudyDocumentRepository
 
 
@@ -93,7 +93,7 @@ class TestUploadStudyDocumentUseCase:
 
     @pytest.mark.asyncio
     async def test_rejects_non_pdf_upload_without_storing_or_publishing(self) -> None:
-        """A non-PDF upload is rejected without storing file, creating document, or publishing."""
+        """A non-PDF upload is rejected with code invalid_file_type without storing file, creating document, or publishing."""
         doc_repo = InMemoryStudyDocumentRepository()
         job_repo = InMemoryDocumentProcessingJobRepository()
         storage = DocumentStorageSpy()
@@ -105,19 +105,24 @@ class TestUploadStudyDocumentUseCase:
             job_repository=job_repo,
         )
 
-        with pytest.raises(StudyDocumentError, match="Only PDF files are accepted"):
+        with pytest.raises(
+            StudyDocumentError, match="Only PDF files are accepted"
+        ) as exc:
             await use_case.execute(
                 filename="notes.txt",
                 content_type="text/plain",
                 content=b"not a pdf",
             )
 
+        assert exc.value.code == "invalid_file_type"
         assert len(storage.saved) == 0
         assert len(publisher.published) == 0
 
     @pytest.mark.asyncio
-    async def test_rejects_empty_upload(self) -> None:
-        """An empty upload is rejected."""
+    async def test_rejects_invalid_filename_upload_without_storing_or_publishing(
+        self,
+    ) -> None:
+        """An upload with an invalid filename is rejected without storing file, creating document, or publishing."""
         doc_repo = InMemoryStudyDocumentRepository()
         job_repo = InMemoryDocumentProcessingJobRepository()
         storage = DocumentStorageSpy()
@@ -129,18 +134,99 @@ class TestUploadStudyDocumentUseCase:
             job_repository=job_repo,
         )
 
-        with pytest.raises(StudyDocumentError, match="content is empty"):
+        with pytest.raises(StudyDocumentError, match="Invalid filename") as exc:
+            await use_case.execute(
+                filename="../test.pdf",
+                content_type="application/pdf",
+                content=b"%PDF-1.4 some content",
+            )
+
+        assert exc.value.code == "invalid_filename"
+        assert len(storage.saved) == 0
+        assert len(publisher.published) == 0
+
+    @pytest.mark.asyncio
+    async def test_rejects_empty_upload(self) -> None:
+        """An empty upload is rejected with code empty_upload."""
+        doc_repo = InMemoryStudyDocumentRepository()
+        job_repo = InMemoryDocumentProcessingJobRepository()
+        storage = DocumentStorageSpy()
+        publisher = PublisherSpy()
+        use_case = UploadStudyDocumentUseCase(
+            document_repository=doc_repo,
+            document_storage=storage,
+            publisher=publisher,
+            job_repository=job_repo,
+        )
+
+        with pytest.raises(StudyDocumentError, match="content is empty") as exc:
             await use_case.execute(
                 filename="empty.pdf",
                 content_type="application/pdf",
                 content=b"",
             )
 
+        assert exc.value.code == "empty_upload"
         assert len(storage.saved) == 0
         assert len(publisher.published) == 0
 
     @pytest.mark.asyncio
-    async def test_keeps_document_and_job_recoverable_on_publisher_failure(self) -> None:
+    async def test_rejects_oversized_upload(self) -> None:
+        """An upload larger than 50 MB is rejected with code file_too_large."""
+        doc_repo = InMemoryStudyDocumentRepository()
+        job_repo = InMemoryDocumentProcessingJobRepository()
+        storage = DocumentStorageSpy()
+        publisher = PublisherSpy()
+        use_case = UploadStudyDocumentUseCase(
+            document_repository=doc_repo,
+            document_storage=storage,
+            publisher=publisher,
+            job_repository=job_repo,
+        )
+
+        oversized_content = b"x" * (MAX_UPLOAD_SIZE_BYTES + 1)
+
+        with pytest.raises(StudyDocumentError, match="size limit") as exc:
+            await use_case.execute(
+                filename="large.pdf",
+                content_type="application/pdf",
+                content=oversized_content,
+            )
+
+        assert exc.value.code == "file_too_large"
+        assert len(storage.saved) == 0
+        assert len(publisher.published) == 0
+
+    @pytest.mark.asyncio
+    async def test_accepts_upload_at_maximum_size(self) -> None:
+        """An upload exactly at the 50 MB limit is accepted when PDF validation passes."""
+        doc_repo = InMemoryStudyDocumentRepository()
+        job_repo = InMemoryDocumentProcessingJobRepository()
+        storage = DocumentStorageSpy()
+        publisher = PublisherSpy()
+        use_case = UploadStudyDocumentUseCase(
+            document_repository=doc_repo,
+            document_storage=storage,
+            publisher=publisher,
+            job_repository=job_repo,
+        )
+
+        max_content = b"x" * MAX_UPLOAD_SIZE_BYTES
+
+        response = await use_case.execute(
+            filename="max-size.pdf",
+            content_type="application/pdf",
+            content=max_content,
+        )
+
+        assert response.status == "PENDING_PROCESSING"
+        assert len(storage.saved) == 1
+        assert len(publisher.published) == 1
+
+    @pytest.mark.asyncio
+    async def test_keeps_document_and_job_recoverable_on_publisher_failure(
+        self,
+    ) -> None:
         """When publishing fails, the document and job remain persisted in a recoverable state."""
         doc_repo = InMemoryStudyDocumentRepository()
         job_repo = InMemoryDocumentProcessingJobRepository()
@@ -167,6 +253,48 @@ class TestUploadStudyDocumentUseCase:
         doc = await doc_repo.find_by_id(storage.saved[0][0])
         assert doc is not None
         assert doc.status == "PENDING_PROCESSING"
+
+
+class TestUploadRegressionBehavior:
+    """Regression tests for upload behavior."""
+
+    @pytest.mark.asyncio
+    async def test_invalid_uploads_do_not_create_documents_or_jobs(self) -> None:
+        """Invalid upload requests do not create a study document or processing job."""
+        for filename, content_type, content in [
+            ("empty.pdf", "application/pdf", b""),
+            ("../bad.pdf", "application/pdf", b"%PDF content"),
+            ("notes.txt", "text/plain", b"content"),
+        ]:
+            doc_repo = InMemoryStudyDocumentRepository()
+            job_repo = InMemoryDocumentProcessingJobRepository()
+            storage = DocumentStorageSpy()
+            publisher = PublisherSpy()
+            use_case = UploadStudyDocumentUseCase(
+                document_repository=doc_repo,
+                document_storage=storage,
+                publisher=publisher,
+                job_repository=job_repo,
+            )
+
+            with pytest.raises(StudyDocumentError):
+                await use_case.execute(
+                    filename=filename,
+                    content_type=content_type,
+                    content=content,
+                )
+
+            # No document was created
+            all_docs = list(doc_repo._documents.values())
+            assert len(all_docs) == 0, f"Expected no documents for {filename}"
+            # No job was created
+            all_jobs = list(job_repo._jobs.values())
+            assert len(all_jobs) == 0, f"Expected no jobs for {filename}"
+            # No storage or publishing
+            assert len(storage.saved) == 0, f"Expected no storage for {filename}"
+            assert len(publisher.published) == 0, (
+                f"Expected no publishing for {filename}"
+            )
 
 
 class TestGetStudyDocumentStatusUseCase:
@@ -211,8 +339,10 @@ class TestGetStudyDocumentStatusUseCase:
         assert response.chunks_count == 5
 
     @pytest.mark.asyncio
-    async def test_returns_failed_status_with_failure_reason(self) -> None:
-        """A failed document returns FAILED status with a safe failure reason."""
+    async def test_returns_failed_status_with_classified_failure_reason(
+        self,
+    ) -> None:
+        """A failed document returns FAILED status with the classified failure code."""
         doc_repo = InMemoryStudyDocumentRepository()
         use_case = GetStudyDocumentStatusUseCase(document_repository=doc_repo)
         doc = StudyDocument.create(
@@ -221,13 +351,51 @@ class TestGetStudyDocumentStatusUseCase:
             content_type="application/pdf",
             storage_path="study_documents/test.pdf",
         )
-        doc.mark_as_failed(failure_reason="No extractable text found")
+        doc.mark_as_failed(failure_reason="no_extractable_text")
         await doc_repo.save(doc)
 
         response = await use_case.execute(doc.id)
 
         assert response.status == "FAILED"
-        assert response.failure_reason == "No extractable text found"
+        assert response.failure_reason == "no_extractable_text"
+
+    @pytest.mark.asyncio
+    async def test_returns_failed_status_with_pdf_cannot_be_read_reason(self) -> None:
+        """A failed document due to unreadable PDF returns the classified code."""
+        doc_repo = InMemoryStudyDocumentRepository()
+        use_case = GetStudyDocumentStatusUseCase(document_repository=doc_repo)
+        doc = StudyDocument.create(
+            id=uuid.uuid4(),
+            filename="test.pdf",
+            content_type="application/pdf",
+            storage_path="study_documents/test.pdf",
+        )
+        doc.mark_as_failed(failure_reason="pdf_cannot_be_read")
+        await doc_repo.save(doc)
+
+        response = await use_case.execute(doc.id)
+
+        assert response.status == "FAILED"
+        assert response.failure_reason == "pdf_cannot_be_read"
+
+    @pytest.mark.asyncio
+    async def test_returns_failed_status_with_encrypted_pdf_reason(self) -> None:
+        """A failed document due to encrypted PDF returns the classified code."""
+        doc_repo = InMemoryStudyDocumentRepository()
+        use_case = GetStudyDocumentStatusUseCase(document_repository=doc_repo)
+        doc = StudyDocument.create(
+            id=uuid.uuid4(),
+            filename="test.pdf",
+            content_type="application/pdf",
+            storage_path="study_documents/test.pdf",
+        )
+        doc.mark_as_failed(failure_reason="encrypted_pdf")
+        await doc_repo.save(doc)
+
+        response = await use_case.execute(doc.id)
+
+        assert response.status == "FAILED"
+        assert response.failure_reason == "encrypted_pdf"
 
     @pytest.mark.asyncio
     async def test_raises_not_found_for_missing_document(self) -> None:

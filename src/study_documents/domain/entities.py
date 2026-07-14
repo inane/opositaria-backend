@@ -1,5 +1,6 @@
 """StudyDocument domain entity."""
 
+import re
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -8,16 +9,21 @@ from datetime import datetime, timezone
 class StudyDocumentError(Exception):
     """Domain error for study document operations."""
 
-    def __init__(self, message: str, safe: bool = False) -> None:
+    def __init__(self, message: str, *, safe: bool = False, code: str = "") -> None:
         self.message = message
         self.safe = safe
+        self.code = code
         super().__init__(message)
 
 
 ALLOWED_CONTENT_TYPES = {"application/pdf"}
 ALLOWED_EXTENSIONS = {".pdf"}
 FORBIDDEN_FILENAME_CHARS = {"/", "\\"}
+RESERVED_FILENAMES = {".", ".."}
+CONTROL_CHARACTERS_RE = re.compile(r"[\x00-\x1f\x7f]")
+MAX_FILENAME_LENGTH = 255
 EMBEDDING_DIMENSION = 384
+MAX_UPLOAD_SIZE_BYTES = 50 * 1024 * 1024
 
 
 @dataclass
@@ -112,20 +118,47 @@ class StudyDocument:
 
         Raises StudyDocumentError if the content type is not allowed.
         """
+        if not filename:
+            raise StudyDocumentError(
+                "Filename must not be blank",
+                safe=True,
+                code="invalid_filename",
+            )
+        if filename in RESERVED_FILENAMES:
+            raise StudyDocumentError(
+                "Filename is reserved",
+                safe=True,
+                code="invalid_filename",
+            )
+        if CONTROL_CHARACTERS_RE.search(filename):
+            raise StudyDocumentError(
+                "Invalid filename",
+                safe=True,
+                code="invalid_filename",
+            )
+        if len(filename) > MAX_FILENAME_LENGTH:
+            raise StudyDocumentError(
+                "Filename must not exceed 255 characters",
+                safe=True,
+                code="invalid_filename",
+            )
         if content_type not in ALLOWED_CONTENT_TYPES:
             raise StudyDocumentError(
                 f"Only PDF files are accepted: received {content_type}",
                 safe=True,
+                code="invalid_file_type",
             )
         if not any(filename.lower().endswith(ext) for ext in ALLOWED_EXTENSIONS):
             raise StudyDocumentError(
                 f"Only PDF files are accepted: received {filename}",
                 safe=True,
+                code="invalid_file_type",
             )
         if any(c in filename for c in FORBIDDEN_FILENAME_CHARS):
             raise StudyDocumentError(
                 f"Invalid filename: {filename}",
                 safe=True,
+                code="invalid_filename",
             )
         return cls(
             id=id,

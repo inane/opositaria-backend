@@ -25,7 +25,7 @@ from src.study_documents.domain.repositories import (
 def _safe_failure_reason(error: Exception) -> str:
     """Return a user-safe failure reason without exposing internals."""
     if isinstance(error, StudyDocumentError) and error.safe:
-        return str(error)
+        return error.code if error.code else str(error)
     return "Document processing failed due to an internal error"
 
 
@@ -71,7 +71,11 @@ class ProcessStudyDocumentUseCase:
         try:
             text = await self._pdf_extractor.extract_text(document.storage_path)
             if not text:
-                raise StudyDocumentError("No extractable text found in PDF", safe=True)
+                raise StudyDocumentError(
+                    "No extractable text found in PDF",
+                    safe=True,
+                    code="no_extractable_text",
+                )
 
             chunks = await self._text_chunker.chunk_text(text)
             if not chunks:

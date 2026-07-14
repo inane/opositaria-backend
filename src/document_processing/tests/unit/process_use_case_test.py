@@ -13,6 +13,7 @@ from src.document_processing.domain.repositories import (
 from src.study_documents.domain.entities import (
     StudyDocument,
     StudyDocumentChunk,
+    StudyDocumentError,
 )
 from src.study_documents.domain.repositories import (
     InMemoryStudyDocumentChunkRepository,
@@ -22,11 +23,14 @@ from src.study_documents.domain.repositories import (
 
 @dataclass
 class PdfTextExtractorStub:
-    """Stub that returns fixed extracted text."""
+    """Stub that returns fixed extracted text or raises an error."""
 
     text: str | None = "Extracted PDF text content for testing."
+    raise_error: Exception | None = None
 
     async def extract_text(self, storage_path: str) -> str | None:
+        if self.raise_error:
+            raise self.raise_error
         return self.text
 
 
@@ -111,8 +115,8 @@ class TestProcessStudyDocumentUseCase:
         assert chunks[0].page_number == 1
 
     @pytest.mark.asyncio
-    async def test_marks_document_and_job_as_processing_before_extraction(self) -> None:
-        """Document and job are marked as PROCESSING/RUNNING before extraction."""
+    async def test_completes_full_lifecycle_transition_from_pending_to_ready(self) -> None:
+        """A document transitions fully through PENDING to READY without state errors."""
         doc_repo = InMemoryStudyDocumentRepository()
         chunk_repo = InMemoryStudyDocumentChunkRepository()
         job_repo = InMemoryDocumentProcessingJobRepository()
@@ -140,7 +144,7 @@ class TestProcessStudyDocumentUseCase:
 
         await use_case.execute(job_id=job_id)
 
-        # Check intermediate state was persisted
+        # Entities were modified in-place through the repo
         assert doc.status == "READY"
         assert job.status == "COMPLETED"
 
@@ -177,11 +181,111 @@ class TestProcessStudyDocumentUseCase:
         processed_doc = await doc_repo.find_by_id(document_id)
         assert processed_doc is not None
         assert processed_doc.status == "FAILED"
-        assert "No extractable text" in (processed_doc.failure_reason or "")
+        assert processed_doc.failure_reason == "no_extractable_text"
 
         processed_job = await job_repo.find_by_id(job_id)
         assert processed_job is not None
         assert processed_job.status == "FAILED"
+
+    @pytest.mark.asyncio
+    async def test_fails_document_when_pdf_cannot_be_read(self) -> None:
+        """An unreadable PDF file marks the document and job failed with code pdf_cannot_be_read and persists no chunks."""
+        doc_repo = InMemoryStudyDocumentRepository()
+        chunk_repo = InMemoryStudyDocumentChunkRepository()
+        job_repo = InMemoryDocumentProcessingJobRepository()
+
+        document_id = uuid.uuid4()
+        job_id = uuid.uuid4()
+        doc = StudyDocument.create(
+            id=document_id,
+            filename="test.pdf",
+            content_type="application/pdf",
+            storage_path="study_documents/test.pdf",
+        )
+        job = DocumentProcessingJob.create(id=job_id, document_id=document_id)
+        await doc_repo.save(doc)
+        await job_repo.save(job)
+
+        use_case = ProcessStudyDocumentUseCase(
+            document_repository=doc_repo,
+            chunk_repository=chunk_repo,
+            job_repository=job_repo,
+            pdf_extractor=PdfTextExtractorStub(
+                raise_error=StudyDocumentError(
+                    "The PDF file could not be read",
+                    safe=True,
+                    code="pdf_cannot_be_read",
+                ),
+            ),
+            text_chunker=TextChunkerStub(),
+            embedding_generator=EmbeddingGeneratorStub(),
+        )
+
+        await use_case.execute(job_id=job_id)
+
+        processed_doc = await doc_repo.find_by_id(document_id)
+        assert processed_doc is not None
+        assert processed_doc.status == "FAILED"
+        assert processed_doc.failure_reason == "pdf_cannot_be_read"
+
+        processed_job = await job_repo.find_by_id(job_id)
+        assert processed_job is not None
+        assert processed_job.status == "FAILED"
+        assert processed_job.failure_reason == "pdf_cannot_be_read"
+
+        # No chunks were persisted
+        chunks = await chunk_repo.find_by_document_id(document_id)
+        assert len(chunks) == 0
+
+    @pytest.mark.asyncio
+    async def test_fails_document_when_pdf_is_encrypted(self) -> None:
+        """An encrypted PDF marks the document and job failed with code encrypted_pdf and persists no chunks."""
+        doc_repo = InMemoryStudyDocumentRepository()
+        chunk_repo = InMemoryStudyDocumentChunkRepository()
+        job_repo = InMemoryDocumentProcessingJobRepository()
+
+        document_id = uuid.uuid4()
+        job_id = uuid.uuid4()
+        doc = StudyDocument.create(
+            id=document_id,
+            filename="test.pdf",
+            content_type="application/pdf",
+            storage_path="study_documents/test.pdf",
+        )
+        job = DocumentProcessingJob.create(id=job_id, document_id=document_id)
+        await doc_repo.save(doc)
+        await job_repo.save(job)
+
+        use_case = ProcessStudyDocumentUseCase(
+            document_repository=doc_repo,
+            chunk_repository=chunk_repo,
+            job_repository=job_repo,
+            pdf_extractor=PdfTextExtractorStub(
+                raise_error=StudyDocumentError(
+                    "The PDF is encrypted",
+                    safe=True,
+                    code="encrypted_pdf",
+                ),
+            ),
+            text_chunker=TextChunkerStub(),
+            embedding_generator=EmbeddingGeneratorStub(),
+        )
+
+        await use_case.execute(job_id=job_id)
+
+        processed_doc = await doc_repo.find_by_id(document_id)
+        assert processed_doc is not None
+        assert processed_doc.status == "FAILED"
+        assert processed_doc.failure_reason == "encrypted_pdf"
+
+        processed_job = await job_repo.find_by_id(job_id)
+        assert processed_job is not None
+        assert processed_job.status == "FAILED"
+        assert processed_job.failure_reason == "encrypted_pdf"
+
+        # No chunks were persisted
+        chunks = await chunk_repo.find_by_document_id(document_id)
+        assert len(chunks) == 0
 
     @pytest.mark.asyncio
     async def test_fails_document_when_chunker_returns_no_chunks(self) -> None:
@@ -254,12 +358,18 @@ class TestProcessStudyDocumentUseCase:
         assert processed_doc is not None
         assert processed_doc.status == "FAILED"
         # Failure reason is sanitized, not raw exception text
-        assert processed_doc.failure_reason == "Document processing failed due to an internal error"
+        assert (
+            processed_doc.failure_reason
+            == "Document processing failed due to an internal error"
+        )
 
         processed_job = await job_repo.find_by_id(job_id)
         assert processed_job is not None
         assert processed_job.status == "FAILED"
-        assert processed_job.failure_reason == "Document processing failed due to an internal error"
+        assert (
+            processed_job.failure_reason
+            == "Document processing failed due to an internal error"
+        )
 
     @pytest.mark.asyncio
     async def test_fails_document_on_embedding_dimension_mismatch(self) -> None:
@@ -295,12 +405,18 @@ class TestProcessStudyDocumentUseCase:
         assert processed_doc is not None
         assert processed_doc.status == "FAILED"
         # Failure reason is sanitized, not exposing dimension config details
-        assert processed_doc.failure_reason == "Document processing failed due to an internal error"
+        assert (
+            processed_doc.failure_reason
+            == "Document processing failed due to an internal error"
+        )
 
         processed_job = await job_repo.find_by_id(job_id)
         assert processed_job is not None
         assert processed_job.status == "FAILED"
-        assert processed_job.failure_reason == "Document processing failed due to an internal error"
+        assert (
+            processed_job.failure_reason
+            == "Document processing failed due to an internal error"
+        )
 
         # No chunks should be persisted
         chunks = await chunk_repo.find_by_document_id(document_id)

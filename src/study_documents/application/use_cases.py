@@ -14,7 +14,7 @@ from src.study_documents.application.ports import (
     DocumentStorage,
     ProcessingRequestPublisher,
 )
-from src.study_documents.domain.entities import StudyDocument, StudyDocumentError
+from src.study_documents.domain.entities import MAX_UPLOAD_SIZE_BYTES, StudyDocument, StudyDocumentError
 from src.study_documents.domain.repositories import StudyDocumentRepository
 
 
@@ -41,7 +41,16 @@ class UploadStudyDocumentUseCase:
     ) -> UploadDocumentResponse:
         """Upload a PDF study document."""
         if not content:
-            raise StudyDocumentError("Upload content is empty", safe=True)
+            raise StudyDocumentError(
+                "Upload content is empty", safe=True, code="empty_upload"
+            )
+
+        if len(content) > MAX_UPLOAD_SIZE_BYTES:
+            raise StudyDocumentError(
+                "Upload content exceeds the 50 MB size limit",
+                safe=True,
+                code="file_too_large",
+            )
 
         document_id = uuid.uuid4()
         doc = StudyDocument.create(

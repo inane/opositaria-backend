@@ -4,7 +4,11 @@ import uuid
 
 import pytest
 
-from src.study_documents.domain.entities import StudyDocument, StudyDocumentError
+from src.study_documents.domain.entities import (
+    MAX_FILENAME_LENGTH,
+    StudyDocument,
+    StudyDocumentError,
+)
 
 
 class TestStudyDocument:
@@ -33,28 +37,109 @@ class TestStudyDocument:
         assert doc.chunks_count == 0
 
     def test_rejects_non_pdf_content_type(self) -> None:
-        """A non-PDF content type is rejected with a domain error."""
+        """A non-PDF content type is rejected with code invalid_file_type."""
         doc_id = uuid.uuid4()
 
-        with pytest.raises(StudyDocumentError, match="Only PDF files are accepted"):
+        with pytest.raises(
+            StudyDocumentError, match="Only PDF files are accepted"
+        ) as exc:
             StudyDocument.create(
                 id=doc_id,
                 filename="notas.txt",
                 content_type="text/plain",
                 storage_path="study_documents/abc.txt",
             )
+        assert exc.value.code == "invalid_file_type"
 
     def test_rejects_non_pdf_filename_extension(self) -> None:
-        """A file without .pdf extension is rejected even with PDF content type."""
+        """A file without .pdf extension is rejected with code invalid_file_type."""
         doc_id = uuid.uuid4()
 
-        with pytest.raises(StudyDocumentError, match="Only PDF files are accepted"):
+        with pytest.raises(
+            StudyDocumentError, match="Only PDF files are accepted"
+        ) as exc:
             StudyDocument.create(
                 id=doc_id,
                 filename="notas.txt",
                 content_type="application/pdf",
                 storage_path="study_documents/abc.txt",
             )
+        assert exc.value.code == "invalid_file_type"
+
+    def test_rejects_blank_filename(self) -> None:
+        """A blank filename is rejected with a domain error with code invalid_filename."""
+        doc_id = uuid.uuid4()
+
+        with pytest.raises(StudyDocumentError, match="Filename must not be blank"):
+            StudyDocument.create(
+                id=doc_id,
+                filename="",
+                content_type="application/pdf",
+                storage_path="study_documents/abc.pdf",
+            )
+
+    def test_rejects_dot_filename(self) -> None:
+        """A filename consisting of only '.' is rejected."""
+        doc_id = uuid.uuid4()
+
+        with pytest.raises(StudyDocumentError, match="Filename is reserved"):
+            StudyDocument.create(
+                id=doc_id,
+                filename=".",
+                content_type="application/pdf",
+                storage_path="study_documents/abc.pdf",
+            )
+
+    def test_rejects_dot_dot_filename(self) -> None:
+        """A filename consisting of only '..' is rejected."""
+        doc_id = uuid.uuid4()
+
+        with pytest.raises(StudyDocumentError, match="Filename is reserved"):
+            StudyDocument.create(
+                id=doc_id,
+                filename="..",
+                content_type="application/pdf",
+                storage_path="study_documents/abc.pdf",
+            )
+
+    def test_rejects_control_characters_in_filename(self) -> None:
+        """A filename containing control characters is rejected."""
+        doc_id = uuid.uuid4()
+
+        with pytest.raises(StudyDocumentError, match="Invalid filename"):
+            StudyDocument.create(
+                id=doc_id,
+                filename="test\x00.pdf",
+                content_type="application/pdf",
+                storage_path="study_documents/abc.pdf",
+            )
+
+    def test_rejects_filename_exceeding_max_length(self) -> None:
+        """A filename longer than the maximum allowed length is rejected."""
+        doc_id = uuid.uuid4()
+        long_filename = "a" * (MAX_FILENAME_LENGTH + 1) + ".pdf"
+
+        with pytest.raises(StudyDocumentError, match="Filename must not exceed"):
+            StudyDocument.create(
+                id=doc_id,
+                filename=long_filename,
+                content_type="application/pdf",
+                storage_path="study_documents/abc.pdf",
+            )
+
+    def test_preserves_safe_filename_on_document(self) -> None:
+        """A safe valid PDF filename is preserved unchanged on the document."""
+        doc_id = uuid.uuid4()
+        original_filename = "introduccion-derecho.pdf"
+
+        doc = StudyDocument.create(
+            id=doc_id,
+            filename=original_filename,
+            content_type="application/pdf",
+            storage_path="study_documents/doc.pdf",
+        )
+
+        assert doc.filename == original_filename
 
     def test_rejects_filename_with_path_separator(self) -> None:
         """A filename containing path separators is rejected for security."""

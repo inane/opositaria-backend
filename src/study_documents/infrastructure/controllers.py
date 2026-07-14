@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from src.study_documents.application.dtos import (
     DocumentStatusResponse,
     UploadDocumentResponse,
+    UploadError,
 )
 from src.study_documents.domain.entities import StudyDocumentError
 
@@ -43,8 +44,15 @@ async def upload_document(
         )
         return response
     except StudyDocumentError as e:
+        error_payload = UploadError(code=e.code, message=e.message).__dict__
+        if e.code == "file_too_large":
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=error_payload,
+            )
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=error_payload,
         )
 
 
@@ -57,4 +65,4 @@ async def get_document_status(
     try:
         return await use_case.execute(document_id=document_id)
     except StudyDocumentError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)

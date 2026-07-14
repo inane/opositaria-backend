@@ -1,4 +1,4 @@
-"""Unit tests for SearchStudyDocumentsSemanticallyUseCase."""
+"""Unit tests for SemanticSearchUseCase."""
 
 import uuid
 from dataclasses import dataclass, field
@@ -10,7 +10,7 @@ from src.semantic_search.application.ports import (
     ChunkSearchResult,
 )
 from src.semantic_search.application.use_cases import (
-    SearchStudyDocumentsSemanticallyUseCase,
+    SemanticSearchUseCase,
 )
 from src.semantic_search.domain.value_objects import SemanticSearchError
 
@@ -40,8 +40,8 @@ class SearchRepositoryStub:
         return self.results[:limit]
 
 
-class TestSearchStudyDocumentsSemanticallyUseCase:
-    """Tests for SearchStudyDocumentsSemanticallyUseCase."""
+class TestSemanticSearchUseCase:
+    """Tests for SemanticSearchUseCase."""
 
     @pytest.mark.asyncio
     async def test_returns_ordered_chunk_matches_with_parent_documents(self) -> None:
@@ -61,7 +61,7 @@ class TestSearchStudyDocumentsSemanticallyUseCase:
                 ),
             ]
         )
-        use_case = SearchStudyDocumentsSemanticallyUseCase(
+        use_case = SemanticSearchUseCase(
             search_repository=repo,
             embedding_generator=EmbeddingGeneratorStub(),
         )
@@ -80,7 +80,7 @@ class TestSearchStudyDocumentsSemanticallyUseCase:
     @pytest.mark.asyncio
     async def test_rejects_blank_query(self) -> None:
         """A blank query is rejected before embedding generation."""
-        use_case = SearchStudyDocumentsSemanticallyUseCase(
+        use_case = SemanticSearchUseCase(
             search_repository=SearchRepositoryStub(),
             embedding_generator=EmbeddingGeneratorStub(),
         )
@@ -104,7 +104,7 @@ class TestSearchStudyDocumentsSemanticallyUseCase:
                 ),
             ]
         )
-        use_case = SearchStudyDocumentsSemanticallyUseCase(
+        use_case = SemanticSearchUseCase(
             search_repository=repo,
             embedding_generator=EmbeddingGeneratorStub(),
         )
@@ -116,7 +116,7 @@ class TestSearchStudyDocumentsSemanticallyUseCase:
     @pytest.mark.asyncio
     async def test_rejects_invalid_limit(self) -> None:
         """An invalid limit is rejected."""
-        use_case = SearchStudyDocumentsSemanticallyUseCase(
+        use_case = SemanticSearchUseCase(
             search_repository=SearchRepositoryStub(),
             embedding_generator=EmbeddingGeneratorStub(),
         )
@@ -127,7 +127,7 @@ class TestSearchStudyDocumentsSemanticallyUseCase:
     @pytest.mark.asyncio
     async def test_returns_empty_list_when_no_ready_chunks(self) -> None:
         """When no ready chunks exist, an empty result list is returned."""
-        use_case = SearchStudyDocumentsSemanticallyUseCase(
+        use_case = SemanticSearchUseCase(
             search_repository=SearchRepositoryStub(results=[]),
             embedding_generator=EmbeddingGeneratorStub(),
         )
@@ -139,10 +139,12 @@ class TestSearchStudyDocumentsSemanticallyUseCase:
     @pytest.mark.asyncio
     async def test_returns_safe_error_on_embedding_failure(self) -> None:
         """When embedding generation fails, a safe error is returned without exposing internals."""
-        use_case = SearchStudyDocumentsSemanticallyUseCase(
+        use_case = SemanticSearchUseCase(
             search_repository=SearchRepositoryStub(),
             embedding_generator=EmbeddingGeneratorStub(should_fail=True),
         )
 
-        with pytest.raises(SemanticSearchError, match="Search service temporarily unavailable"):
+        with pytest.raises(
+            SemanticSearchError, match="Search service temporarily unavailable"
+        ):
             await use_case.execute(query_text="test")

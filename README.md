@@ -60,7 +60,26 @@ curl -X POST http://localhost:8000/study-documents/upload \
   -F "file=@/path/to/document.pdf"
 ```
 
-Returns `202 Accepted` with document ID and `PENDING_PROCESSING` status.
+Returns `202 Accepted` with document ID and `PENDING_PROCESSING` status on success.
+
+**Error responses:**
+
+| Status | Code | Description |
+|--------|------|-------------|
+| `413 Payload Too Large` | `file_too_large` | Upload exceeds the 50 MB size limit |
+| `422 Unprocessable Content` | `empty_upload` | Upload content is empty |
+| `422 Unprocessable Content` | `invalid_file_type` | File is not a PDF (wrong content type or extension) |
+| `422 Unprocessable Content` | `invalid_filename` | Filename contains invalid characters (blank, reserved, path separators, control characters, or exceeds 255 chars) |
+
+Error payloads are structured JSON:
+```json
+{
+  "detail": {
+    "code": "file_too_large",
+    "message": "Upload content exceeds the 50 MB size limit"
+  }
+}
+```
 
 ### Check Document Status
 
