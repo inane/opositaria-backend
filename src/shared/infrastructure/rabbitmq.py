@@ -2,6 +2,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 import aio_pika
+from aio_pika.abc import AbstractChannel
 
 from src.shared.infrastructure.settings import RabbitMQSettings
 
@@ -22,7 +23,7 @@ async def create_rabbitmq_connection(
 @asynccontextmanager
 async def get_rabbitmq_channel(
     connection: aio_pika.RobustConnection,
-) -> AsyncIterator[aio_pika.Channel]:
+) -> AsyncIterator[AbstractChannel]:
     """Yield a RabbitMQ channel from the connection."""
     async with connection.channel() as channel:
         yield channel

@@ -5,6 +5,7 @@ import json
 import uuid
 
 import aio_pika
+from aio_pika.abc import AbstractIncomingMessage
 
 from src.document_processing.application.use_cases import ProcessStudyDocumentUseCase
 
@@ -28,7 +29,7 @@ class DocumentProcessingWorker:
             await channel.declare_queue(self.QUEUE_NAME, durable=True)
             await channel.set_qos(prefetch_count=1)
 
-            async def on_message(message: aio_pika.IncomingMessage) -> None:
+            async def on_message(message: AbstractIncomingMessage) -> None:
                 async with message.process(ignore_processed=True):
                     try:
                         body = json.loads(message.body.decode())

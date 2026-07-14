@@ -42,7 +42,7 @@ uv sync --extra ml
 ### 4. Start the API
 
 ```bash
-uv run uvicorn src.shared.infrastructure.factory:create_app --reload --port 8000
+uv run uvicorn src.main:app --reload --port 8000
 ```
 
 ### 5. Start the Worker (separate terminal)

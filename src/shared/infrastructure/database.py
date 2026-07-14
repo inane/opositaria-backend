@@ -1,13 +1,18 @@
 from collections.abc import AsyncGenerator
 
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
 from src.shared.infrastructure.settings import DatabaseSettings
 
 
 def create_async_engine_from_settings(
     settings: DatabaseSettings | None = None,
-) -> AsyncSession:
+) -> AsyncEngine:
     """Create a shared async SQLAlchemy engine from settings.
 
     This function lives in infrastructure and MUST NOT be imported
@@ -20,7 +25,7 @@ def create_async_engine_from_settings(
     )
 
 
-def create_session_factory(engine: AsyncSession) -> async_sessionmaker[AsyncSession]:
+def create_session_factory(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
     """Create an async session factory from an engine."""
     return async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
 
