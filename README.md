@@ -1,168 +1,116 @@
-# Python Agentic Developer
+# Opositaria Backend - Semantic PDF Search
 
-[![Python](https://img.shields.io/badge/Python-3.12-3776AB.svg)](https://python.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688.svg)](https://fastapi.tiangolo.com/)
-[![SQLAlchemy](https://img.shields.io/badge/SQLAlchemy-2.0-D71F00.svg)](https://www.sqlalchemy.org/)
-[![Ruff](https://img.shields.io/badge/Ruff-0.8-D7FF64.svg)](https://docs.astral.sh/ruff/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+## Prerequisites
 
-Production-ready Python backend template with hexagonal architecture and TDD practices.
-
-## Features
-
-- 🏗️ **Hexagonal architecture** with vertical slicing
-- ✅ **TDD** with unit, integration, and e2e tests
-
----
+- Docker and Docker Compose
+- Python 3.12+ (3.12 or 3.13 recommended; 3.14 has limited ML library support)
+- `uv` (Python package manager)
 
 ## Quick Start
 
-### Prerequisites
-
-- Python 3.12+
-- [uv](https://docs.astral.sh/uv/) (package manager)
-- Docker (for PostgreSQL)
-
-### Development
+### 1. Start Infrastructure
 
 ```bash
-# Install dependencies
-uv sync
-
-# Set up pre-commit hooks
-uv run pre-commit install
-
-# Configure environment
-cp .env.example .env
-# Edit .env with your settings (DATABASE_URL, SECRET_KEY, etc.)
-
-# Start development server
-uv run uvicorn src.shared.infrastructure.server:app --reload
-
-# Run tests
-uv run pytest
-```
-
-### Docker
-
-```bash
+# Start PostgreSQL (with pgvector) and RabbitMQ
 docker compose up -d
+
+# Verify both services are healthy
+docker compose ps
 ```
 
----
-
-## Stack
-
-### Backend
-
-- Python 3.12+ / FastAPI
-- SQLAlchemy 2.0 (async) + Alembic
-- Pydantic v2 (validation, DTOs)
-- Ruff (linting + formatting)
-- MyPy (type checking)
-- Pytest + pytest-asyncio (unit, integration, e2e)
-
----
-
-## Architecture
-
-The project follows **hexagonal architecture** with vertical slicing by business module.
-
-```
-src/
-├── auth/                    # Authentication (login, OTP, sessions)
-├── users/                   # User management (admin CRUD, domain)
-├── profile/                 # Profile (self-service view/edit)
-├── health/                  # Health check
-└── shared/                  # Factory, Server, Database, DomainError
-```
-
-Each module contains:
-- `domain/` — Entities, Value Objects, Repositories (ports), Domain Services
-- `application/` — Use Cases, DTOs, External Service Ports
-- `infrastructure/` — Adapters (DB, HTTP controllers)
-- `tests/` — Unit, integration, and e2e tests
-
----
-
-## Development
-
-### Commands
-
-| Command                                       | Description                        |
-|-----------------------------------------------|------------------------------------|
-| `uv sync`                                     | Install dependencies               |
-| `uv run uvicorn src.shared.server:app --reload` | Development server                 |
-| `uv run pytest`                               | Run all tests                      |
-| `uv run pytest -m unit`                       | Unit tests only                    |
-| `uv run pytest -m integration`               | Integration tests (uses real DB)   |
-| `uv run pytest -m e2e`                        | E2E tests                          |
-| `uv run mypy src/`                            | Type checking                      |
-| `uv run ruff check .`                         | Lint                               |
-| `uv run ruff format .`                        | Format                             |
-| `uv run ruff check --fix .`                   | Lint with auto-fix                 |
-| `bash ralph.sh <change> [max]`               | Automated implementation loop      |
-
-### Alembic Migrations
+### 2. Run Database Migrations
 
 ```bash
-# Generate a migration after changing models
-uv run alembic revision --autogenerate -m "description"
-
-# Migrations run automatically on server start
 uv run alembic upgrade head
 ```
 
----
+This applies three migrations:
+1. Enables the `vector` extension (pgvector)
+2. Creates `study_documents`, `study_document_chunks`, and `document_processing_jobs` tables
+3. Creates an HNSW cosine vector index on chunk embeddings
 
-## Testing Strategy
+### 3. Install Dependencies
 
-Tests are colocated within each module:
+```bash
+# Core dependencies
+uv sync
 
+# For local embeddings (requires Python 3.12 or 3.13):
+uv sync --extra ml
 ```
-module/tests/
-├── unit/           # Domain + Application tests (no external deps)
-├── integration/    # Adapter tests (real DB)
-└── e2e/            # Full HTTP flow tests
+
+### 4. Start the API
+
+```bash
+uv run uvicorn src.shared.infrastructure.factory:create_app --reload --port 8000
 ```
 
-### Key Principles
+### 5. Start the Worker (separate terminal)
 
-- **InMemory over mocks**: Use InMemory implementations for repositories, stubs/spies for application ports
-- **Real databases**: Integration tests use test databases (SQLite or testcontainers)
-- **Inside-out TDD**: Start from domain, then application, then infrastructure
+```bash
+uv run python -m src.document_processing.infrastructure.worker_entrypoint
+```
 
----
+## API Endpoints
 
-## Environment Variables
+### Upload a PDF
 
-| Variable       | Default | Description                                       |
-|----------------|---------|---------------------------------------------------|
-| `HOST`         | `0.0.0.0` | Server bind address                             |
-| `PORT`         | `8000`  | Server port                                       |
-| `DATABASE_URL` | -       | Database connection string (required)             |
-| `SECRET_KEY`   | -       | Secret key for JWT signing (required)             |
-| `LOG_LEVEL`    | `info`  | Log level (debug, info, warn, error)              |
+```bash
+curl -X POST http://localhost:8000/study-documents/upload \
+  -F "file=@/path/to/document.pdf"
+```
 
----
+Returns `202 Accepted` with document ID and `PENDING_PROCESSING` status.
 
-## AI-Driven Development
+### Check Document Status
 
-This project uses [OpenSpec](https://opencode.ai) for spec-driven development with
-an automated implementation loop. See `RALPH.md` for the Ralph Runner tutorial.
+```bash
+curl http://localhost:8000/study-documents/{document_id}/status
+```
 
-### Quick reference
+Returns the current lifecycle status: `PENDING_PROCESSING`, `PROCESSING`, `READY`, or `FAILED`.
 
-| Phase | Tool | Purpose |
-|---|---|---|
-| Discovery | `spec-explore` (Tab) | Explore ideas, clarify requirements |
-| Proposal | `spec-propose` (Tab) | Generate design, specs, and tasks |
-| **Implementation** | **`ralph.sh`** | **Automated TDD loop** |
-| Review | `spec-review` (Tab) | Code review against design principles |
-| Archive | `spec-archive` (Tab) | Consolidate into global spec |
+### Semantic Search
 
----
+```bash
+curl -X POST http://localhost:8000/semantic-search/search \
+  -H "Content-Type: application/json" \
+  -d '{"query": "derecho administrativo", "limit": 10}'
+```
 
-## License
+Returns matched chunks ordered by cosine similarity with parent document metadata.
 
-MIT
+## Architecture Notes
+
+### pgvector
+
+The `vector` extension is enabled via Alembic migration. The Docker image `pgvector/pgvector:pg17` already includes the extension - it is a PostgreSQL 17 image with pgvector pre-installed.
+
+### PostgreSQL as Canonical State Store
+
+Document lifecycle state and processing job state are persisted exclusively in PostgreSQL. Redis is intentionally out of scope for the MVP. If Redis is added later, it would only be for transient progress reporting, not for canonical state.
+
+### RabbitMQ over Kafka
+
+RabbitMQ is used for the MVP's asynchronous document processing. Kafka is intentionally out of scope - its offset management, consumer groups, and partitioning are unnecessary overhead for a single document-processing worker flow.
+
+### PDF Support (Selectable Text Only)
+
+Only selectable-text PDFs are supported. OCR for scanned/image-only PDFs is out of scope. If a PDF has no extractable text, the document transitions to `FAILED` with a clear failure reason.
+
+### Embeddings
+
+Local embeddings are generated using numpy (development) or sentence-transformers (production, requires `uv sync --extra ml`). The embedding dimension is 384 (all-MiniLM-L6-v2). The dimension is validated before persistence to prevent data corruption.
+
+## Running Tests
+
+```bash
+# Unit tests (fast, no external deps)
+uv run pytest src/ -m unit -v
+
+# Integration tests (require PostgreSQL)
+uv run pytest src/ -m integration -v
+
+# All tests
+uv run pytest src/ -v
+```
