@@ -38,7 +38,7 @@ The system SHALL process RabbitMQ document processing messages through a worker 
 - **WHEN** the failure is handled
 - **THEN** the system SHALL mark the processing job as failed
 - **AND** the system SHALL mark the document as `FAILED`
-- **AND** the system SHALL store a safe failure reason
+- **AND** the system SHALL store a safe failure reason associated with a stable failure code when the failure category is known
 - **AND** safe failure reasons SHALL be user-safe messages that do not expose stack traces, filesystem paths, model internals, broker connection details, or raw infrastructure exception text
 - **AND** the worker SHALL commit the failed document and job state before acknowledging or rejecting the RabbitMQ message
 
@@ -91,4 +91,43 @@ The system SHALL extract text from PDFs that contain selectable text and SHALL N
 - **GIVEN** a PDF page contains only scanned image content
 - **WHEN** the worker extracts text
 - **THEN** the system SHALL treat the page as having no extractable text
+- **AND** the system SHALL classify the failure as `no_extractable_text`
 - **AND** the system SHALL NOT invoke OCR
+
+### Requirement: Classify PDF extraction failures safely
+The system SHALL classify known PDF extraction failures into stable, safe failure categories.
+
+#### Scenario: Unreadable PDF fails with safe reason
+- **GIVEN** a persisted study document points to a PDF file that cannot be read by the PDF extraction adapter
+- **WHEN** the worker processes the document
+- **THEN** the system SHALL mark the document as `FAILED`
+- **AND** the system SHALL mark the processing job as failed
+- **AND** the system SHALL store a safe failure reason associated with code `pdf_cannot_be_read`
+- **AND** the system SHALL NOT persist document chunks for that document
+- **AND** the safe failure reason SHALL NOT expose raw parser errors, stack traces, filesystem paths, or library internals
+
+#### Scenario: Encrypted PDF fails with safe reason
+- **GIVEN** a persisted study document points to an encrypted or password-protected PDF
+- **WHEN** the worker processes the document
+- **THEN** the system SHALL mark the document as `FAILED`
+- **AND** the system SHALL mark the processing job as failed
+- **AND** the system SHALL store a safe failure reason associated with code `encrypted_pdf`
+- **AND** the system SHALL NOT persist document chunks for that document
+- **AND** the safe failure reason SHALL NOT expose raw parser errors, stack traces, filesystem paths, or library internals
+
+#### Scenario: Selectable text cannot be extracted
+- **GIVEN** a persisted study document points to a PDF with no usable selectable text
+- **WHEN** the worker processes the document
+- **THEN** the system SHALL mark the document as `FAILED`
+- **AND** the system SHALL mark the processing job as failed
+- **AND** the system SHALL store a safe failure reason associated with code `no_extractable_text`
+- **AND** the system SHALL NOT persist document chunks for that document
+- **AND** the system SHALL NOT attempt OCR
+
+#### Scenario: Unknown processing failure remains safe
+- **GIVEN** document processing fails for an unexpected technical reason
+- **WHEN** the worker handles the failure
+- **THEN** the system SHALL mark the document as `FAILED`
+- **AND** the system SHALL mark the processing job as failed
+- **AND** the system SHALL store a generic safe failure reason
+- **AND** the generic safe failure reason SHALL NOT expose raw exception text or infrastructure details
