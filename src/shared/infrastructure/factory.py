@@ -26,6 +26,7 @@ from src.shared.infrastructure.database import (
     create_session_factory,
 )
 from src.shared.infrastructure.rabbitmq import create_rabbitmq_connection
+from src.shared.infrastructure.settings import AuthSettings
 from src.study_documents.application.use_cases import (
     GetStudyDocumentStatusUseCase,
     UploadStudyDocumentUseCase,
@@ -40,6 +41,19 @@ from src.study_documents.infrastructure.repositories import (
     PostgresSemanticChunkSearchRepository,
     PostgresStudyDocumentRepository,
 )
+from src.users.application.use_cases import (
+    GetCurrentUserUseCase,
+    LoginUserUseCase,
+    RegisterUserUseCase,
+)
+from src.users.infrastructure.controllers import (
+    _get_current_user_use_case,
+    _get_login_use_case,
+    _get_register_use_case,
+    router as auth_router,
+)
+from src.users.infrastructure.repositories import PostgresUserRepository
+from src.users.infrastructure.security import BcryptPasswordHasher, JwtTokenService
 
 
 def create_app() -> FastAPI:
@@ -48,6 +62,11 @@ def create_app() -> FastAPI:
 
     engine = create_async_engine_from_settings()
     session_factory = create_session_factory(engine)
+
+    # JWT and password hasher instances (no session needed)
+    password_hasher = BcryptPasswordHasher()
+    jwt_settings = AuthSettings()
+    token_service = JwtTokenService(settings=jwt_settings)
 
     async def get_db() -> AsyncGenerator[AsyncSession, None]:
         async with session_factory() as session:
@@ -96,7 +115,41 @@ def create_app() -> FastAPI:
     app.dependency_overrides[_get_status_use_case] = create_status_use_case
     app.dependency_overrides[_get_search_use_case] = create_search_use_case
 
+    async def create_register_use_case(
+        session: AsyncSession = Depends(get_db),
+    ) -> RegisterUserUseCase:
+        user_repo = PostgresUserRepository(session)
+        return RegisterUserUseCase(
+            user_repository=user_repo,
+            password_hasher=password_hasher,
+            token_service=token_service,
+        )
+
+    async def create_login_use_case(
+        session: AsyncSession = Depends(get_db),
+    ) -> LoginUserUseCase:
+        user_repo = PostgresUserRepository(session)
+        return LoginUserUseCase(
+            user_repository=user_repo,
+            password_hasher=password_hasher,
+            token_service=token_service,
+        )
+
+    async def create_current_user_use_case(
+        session: AsyncSession = Depends(get_db),
+    ) -> GetCurrentUserUseCase:
+        user_repo = PostgresUserRepository(session)
+        return GetCurrentUserUseCase(
+            user_repository=user_repo,
+            token_service=token_service,
+        )
+
+    app.dependency_overrides[_get_register_use_case] = create_register_use_case
+    app.dependency_overrides[_get_login_use_case] = create_login_use_case
+    app.dependency_overrides[_get_current_user_use_case] = create_current_user_use_case
+
     app.include_router(study_documents_router)
     app.include_router(semantic_search_router)
+    app.include_router(auth_router)
 
     return app

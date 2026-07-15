@@ -14,7 +14,11 @@ from src.study_documents.application.ports import (
     DocumentStorage,
     ProcessingRequestPublisher,
 )
-from src.study_documents.domain.entities import MAX_UPLOAD_SIZE_BYTES, StudyDocument, StudyDocumentError
+from src.study_documents.domain.entities import (
+    MAX_UPLOAD_SIZE_BYTES,
+    StudyDocument,
+    StudyDocumentError,
+)
 from src.study_documents.domain.repositories import StudyDocumentRepository
 
 

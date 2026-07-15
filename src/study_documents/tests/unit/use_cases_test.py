@@ -15,7 +15,11 @@ from src.study_documents.application.use_cases import (
     GetStudyDocumentStatusUseCase,
     UploadStudyDocumentUseCase,
 )
-from src.study_documents.domain.entities import MAX_UPLOAD_SIZE_BYTES, StudyDocument, StudyDocumentError
+from src.study_documents.domain.entities import (
+    MAX_UPLOAD_SIZE_BYTES,
+    StudyDocument,
+    StudyDocumentError,
+)
 from src.study_documents.domain.repositories import InMemoryStudyDocumentRepository
 
 

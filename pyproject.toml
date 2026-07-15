@@ -16,6 +16,8 @@ dependencies = [
     "aio-pika>=9.5.0",
     "numpy>=2.5.1",
     "python-multipart>=0.0.32",
+    "bcrypt>=5.0.0",
+    "pyjwt>=2.13.0",
 ]
 
 [project.optional-dependencies]
@@ -43,3 +45,11 @@ markers = [
     "e2e: End-to-end tests (full HTTP stack)",
 ]
 addopts = "-v --tb=short"
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "mypy>=2.1.0",
+    "pytest-asyncio>=1.4.0",
+    "ruff>=0.15.18",
+]

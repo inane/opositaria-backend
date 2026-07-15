@@ -9,7 +9,6 @@ from src.semantic_search.domain.value_objects import (
 
 
 class SemanticSearchUseCase:
-
     def __init__(
         self,
         search_repository: SemanticChunkSearchRepository,

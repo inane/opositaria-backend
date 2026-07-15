@@ -115,7 +115,9 @@ class TestProcessStudyDocumentUseCase:
         assert chunks[0].page_number == 1
 
     @pytest.mark.asyncio
-    async def test_completes_full_lifecycle_transition_from_pending_to_ready(self) -> None:
+    async def test_completes_full_lifecycle_transition_from_pending_to_ready(
+        self,
+    ) -> None:
         """A document transitions fully through PENDING to READY without state errors."""
         doc_repo = InMemoryStudyDocumentRepository()
         chunk_repo = InMemoryStudyDocumentChunkRepository()
