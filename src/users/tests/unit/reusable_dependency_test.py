@@ -34,7 +34,7 @@ async def test_protected_endpoint_with_valid_token() -> None:
     ) as client:
         register_resp = await client.post(
             "/auth/register",
-            json={"email": "future-module-test@example.com", "password": "password123"},
+            json={"email": "ines@ines.com", "password": "12345678"},
         )
         token = register_resp.json()["access_token"]
 
@@ -44,7 +44,7 @@ async def test_protected_endpoint_with_valid_token() -> None:
         )
 
     assert response.status_code == 200
-    assert response.json()["email"] == "future-module-test@example.com"
+    assert response.json()["email"] == "ines@ines.com"
 
 
 @pytest.mark.asyncio

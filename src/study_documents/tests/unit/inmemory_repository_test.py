@@ -23,6 +23,7 @@ class TestInMemoryStudyDocumentRepository:
             filename="test.pdf",
             content_type="application/pdf",
             storage_path="study_documents/test.pdf",
+        owner_user_id=uuid.uuid4(),
         )
 
         await repo.save(doc)
@@ -38,6 +39,44 @@ class TestInMemoryStudyDocumentRepository:
         repo = InMemoryStudyDocumentRepository()
 
         found = await repo.find_by_id(uuid.uuid4())
+
+        assert found is None
+
+    @pytest.mark.asyncio
+    async def test_finds_document_by_id_and_owner(self) -> None:
+        """A saved document is retrievable by its identifier and owner."""
+        repo = InMemoryStudyDocumentRepository()
+        owner_id = uuid.uuid4()
+        doc = StudyDocument.create(
+            id=uuid.uuid4(),
+            filename="test.pdf",
+            content_type="application/pdf",
+            storage_path="study_documents/test.pdf",
+            owner_user_id=owner_id,
+        )
+
+        await repo.save(doc)
+        found = await repo.find_by_id_and_owner(doc.id, owner_id)
+
+        assert found is not None
+        assert found.id == doc.id
+
+    @pytest.mark.asyncio
+    async def test_does_not_return_document_for_different_owner(self) -> None:
+        """Finding a document with a different owner returns None."""
+        repo = InMemoryStudyDocumentRepository()
+        owner_id = uuid.uuid4()
+        other_owner_id = uuid.uuid4()
+        doc = StudyDocument.create(
+            id=uuid.uuid4(),
+            filename="test.pdf",
+            content_type="application/pdf",
+            storage_path="study_documents/test.pdf",
+            owner_user_id=owner_id,
+        )
+
+        await repo.save(doc)
+        found = await repo.find_by_id_and_owner(doc.id, other_owner_id)
 
         assert found is None
 

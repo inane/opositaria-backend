@@ -20,6 +20,13 @@ class StudyDocumentRepository(Protocol):
         """Find a study document by its identifier."""
         ...
 
+    @abstractmethod
+    async def find_by_id_and_owner(
+        self, document_id: uuid.UUID, owner_id: uuid.UUID
+    ) -> StudyDocument | None:
+        """Find a study document by its identifier and owner."""
+        ...
+
     async def flush(self) -> None:
         """Flush pending writes to durable storage.
 
@@ -78,6 +85,17 @@ class InMemoryStudyDocumentRepository:
     async def find_by_id(self, document_id: uuid.UUID) -> StudyDocument | None:
         """Find a study document by its identifier."""
         return self._documents.get(document_id)
+
+    async def find_by_id_and_owner(
+        self, document_id: uuid.UUID, owner_id: uuid.UUID
+    ) -> StudyDocument | None:
+        """Find a study document by its identifier and owner."""
+        doc = self._documents.get(document_id)
+        if doc is None:
+            return None
+        if doc.owner_user_id != owner_id:
+            return None
+        return doc
 
     async def flush(self) -> None:
         """No-op for in-memory storage."""

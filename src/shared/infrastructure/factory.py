@@ -54,6 +54,18 @@ from src.users.infrastructure.controllers import (
 )
 from src.users.infrastructure.repositories import PostgresUserRepository
 from src.users.infrastructure.security import BcryptPasswordHasher, JwtTokenService
+from src.study_spaces.application.use_cases import (
+    CreateStudySpaceUseCase,
+    ListStudySpacesUseCase,
+)
+from src.study_spaces.infrastructure.controllers import (
+    _get_create_space_use_case,
+    _get_list_spaces_use_case,
+    router as study_spaces_router,
+)
+from src.study_spaces.infrastructure.repositories import (
+    PostgresStudySpaceRepository,
+)
 
 
 def create_app() -> FastAPI:
@@ -148,8 +160,28 @@ def create_app() -> FastAPI:
     app.dependency_overrides[_get_login_use_case] = create_login_use_case
     app.dependency_overrides[_get_current_user_use_case] = create_current_user_use_case
 
+    async def create_create_space_use_case(
+        session: AsyncSession = Depends(get_db),
+    ) -> CreateStudySpaceUseCase:
+        space_repo = PostgresStudySpaceRepository(session)
+        doc_repo = PostgresStudyDocumentRepository(session)
+        return CreateStudySpaceUseCase(
+            space_repository=space_repo,
+            document_repository=doc_repo,
+        )
+
+    async def create_list_spaces_use_case(
+        session: AsyncSession = Depends(get_db),
+    ) -> ListStudySpacesUseCase:
+        space_repo = PostgresStudySpaceRepository(session)
+        return ListStudySpacesUseCase(space_repository=space_repo)
+
+    app.dependency_overrides[_get_create_space_use_case] = create_create_space_use_case
+    app.dependency_overrides[_get_list_spaces_use_case] = create_list_spaces_use_case
+
     app.include_router(study_documents_router)
     app.include_router(semantic_search_router)
     app.include_router(auth_router)
+    app.include_router(study_spaces_router)
 
     return app

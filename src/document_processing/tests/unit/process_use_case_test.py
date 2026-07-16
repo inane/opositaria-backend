@@ -80,6 +80,7 @@ class TestProcessStudyDocumentUseCase:
             filename="test.pdf",
             content_type="application/pdf",
             storage_path="study_documents/test.pdf",
+        owner_user_id=uuid.uuid4(),
         )
         job = DocumentProcessingJob.create(id=job_id, document_id=document_id)
         await doc_repo.save(doc)
@@ -130,6 +131,7 @@ class TestProcessStudyDocumentUseCase:
             filename="test.pdf",
             content_type="application/pdf",
             storage_path="study_documents/test.pdf",
+        owner_user_id=uuid.uuid4(),
         )
         job = DocumentProcessingJob.create(id=job_id, document_id=document_id)
         await doc_repo.save(doc)
@@ -164,6 +166,7 @@ class TestProcessStudyDocumentUseCase:
             filename="test.pdf",
             content_type="application/pdf",
             storage_path="study_documents/test.pdf",
+        owner_user_id=uuid.uuid4(),
         )
         job = DocumentProcessingJob.create(id=job_id, document_id=document_id)
         await doc_repo.save(doc)
@@ -203,6 +206,7 @@ class TestProcessStudyDocumentUseCase:
             filename="test.pdf",
             content_type="application/pdf",
             storage_path="study_documents/test.pdf",
+        owner_user_id=uuid.uuid4(),
         )
         job = DocumentProcessingJob.create(id=job_id, document_id=document_id)
         await doc_repo.save(doc)
@@ -253,6 +257,7 @@ class TestProcessStudyDocumentUseCase:
             filename="test.pdf",
             content_type="application/pdf",
             storage_path="study_documents/test.pdf",
+        owner_user_id=uuid.uuid4(),
         )
         job = DocumentProcessingJob.create(id=job_id, document_id=document_id)
         await doc_repo.save(doc)
@@ -303,6 +308,7 @@ class TestProcessStudyDocumentUseCase:
             filename="test.pdf",
             content_type="application/pdf",
             storage_path="study_documents/test.pdf",
+        owner_user_id=uuid.uuid4(),
         )
         job = DocumentProcessingJob.create(id=job_id, document_id=document_id)
         await doc_repo.save(doc)
@@ -340,6 +346,7 @@ class TestProcessStudyDocumentUseCase:
             filename="test.pdf",
             content_type="application/pdf",
             storage_path="study_documents/test.pdf",
+        owner_user_id=uuid.uuid4(),
         )
         job = DocumentProcessingJob.create(id=job_id, document_id=document_id)
         await doc_repo.save(doc)
@@ -387,6 +394,7 @@ class TestProcessStudyDocumentUseCase:
             filename="test.pdf",
             content_type="application/pdf",
             storage_path="study_documents/test.pdf",
+        owner_user_id=uuid.uuid4(),
         )
         job = DocumentProcessingJob.create(id=job_id, document_id=document_id)
         await doc_repo.save(doc)
@@ -438,6 +446,7 @@ class TestProcessStudyDocumentUseCase:
             filename="test.pdf",
             content_type="application/pdf",
             storage_path="study_documents/test.pdf",
+        owner_user_id=uuid.uuid4(),
         )
         doc.mark_as_processing()
         doc.mark_as_ready(chunk_count=2)
@@ -476,6 +485,7 @@ class TestProcessStudyDocumentUseCase:
             filename="test.pdf",
             content_type="application/pdf",
             storage_path="study_documents/test.pdf",
+        owner_user_id=uuid.uuid4(),
         )
         job = DocumentProcessingJob.create(id=job_id, document_id=document_id)
         await doc_repo.save(doc)
@@ -521,6 +531,7 @@ class TestProcessStudyDocumentUseCase:
             filename="test.pdf",
             content_type="application/pdf",
             storage_path="study_documents/test.pdf",
+        owner_user_id=uuid.uuid4(),
         )
         job = DocumentProcessingJob.create(id=job_id, document_id=document_id)
         await doc_repo.save(doc)

@@ -35,7 +35,7 @@ class SearchRepositoryStub:
     results: list[ChunkSearchResult] = field(default_factory=list)
 
     async def find_nearest_by_embedding(
-        self, embedding: list[float], limit: int
+        self, embedding: list[float], limit: int, owner_id: str | None = None
     ) -> list[ChunkSearchResult]:
         return self.results[:limit]
 

@@ -31,6 +31,7 @@ class TestPostgresStudyDocumentRepository:
             filename="test.pdf",
             content_type="application/pdf",
             storage_path="study_documents/test.pdf",
+            owner_user_id=uuid.uuid4(),
         )
 
         await repo.save(doc)
@@ -51,6 +52,7 @@ class TestPostgresStudyDocumentRepository:
             filename="test.pdf",
             content_type="application/pdf",
             storage_path="study_documents/test.pdf",
+            owner_user_id=uuid.uuid4(),
         )
         await repo.save(doc)
         doc.mark_as_processing()
@@ -81,6 +83,7 @@ class TestPostgresStudyDocumentChunkRepository:
             filename="test.pdf",
             content_type="application/pdf",
             storage_path="study_documents/test.pdf",
+            owner_user_id=uuid.uuid4(),
         )
         await doc_repo.save(doc)
 
@@ -126,6 +129,7 @@ class TestPostgresStudyDocumentChunkRepository:
             filename="test.pdf",
             content_type="application/pdf",
             storage_path="study_documents/test.pdf",
+            owner_user_id=uuid.uuid4(),
         )
         await doc_repo.save(doc)
 
@@ -174,6 +178,7 @@ class TestPostgresDocumentProcessingJobRepository:
             filename="test.pdf",
             content_type="application/pdf",
             storage_path="study_documents/test.pdf",
+            owner_user_id=uuid.uuid4(),
         )
         await doc_repo.save(doc)
 
@@ -208,6 +213,7 @@ class TestPostgresSemanticChunkSearchRepository:
             filename="ready.pdf",
             content_type="application/pdf",
             storage_path="study_documents/ready.pdf",
+            owner_user_id=uuid.uuid4(),
         )
         ready_doc.mark_as_processing()
         ready_doc.mark_as_ready(chunk_count=1)
@@ -230,6 +236,7 @@ class TestPostgresSemanticChunkSearchRepository:
             filename="pending.pdf",
             content_type="application/pdf",
             storage_path="study_documents/pending.pdf",
+            owner_user_id=uuid.uuid4(),
         )
         await doc_repo.save(pending_doc)
 

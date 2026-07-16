@@ -11,6 +11,12 @@ from src.study_documents.application.dtos import (
     UploadError,
 )
 from src.study_documents.domain.entities import StudyDocumentError
+from src.users.domain.entities import UserError
+from src.users.infrastructure.controllers import (
+    _get_current_user_use_case,
+    get_bearer_token,
+)
+from src.users.application.use_cases import GetCurrentUserUseCase
 
 router = APIRouter(prefix="/study-documents", tags=["study-documents"])
 
@@ -33,26 +39,35 @@ async def _get_status_use_case() -> Any:
 async def upload_document(
     file: UploadFile = File(...),
     use_case: Any = Depends(_get_upload_use_case),
+    token: str = Depends(get_bearer_token),
+    auth_use_case: GetCurrentUserUseCase = Depends(_get_current_user_use_case),
 ) -> UploadDocumentResponse:
     """Upload a PDF study document for semantic processing."""
     try:
+        user = await auth_use_case.execute(token=token)
         content = await file.read()
         response = await use_case.execute(
             filename=file.filename or "untitled.pdf",
             content_type=file.content_type or "application/pdf",
             content=content,
+            owner_user_id=user.id,
         )
         return response
     except StudyDocumentError as e:
         error_payload = UploadError(code=e.code, message=e.message).__dict__
         if e.code == "file_too_large":
             raise HTTPException(
-                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                status_code=status.HTTP_413_CONTENT_TOO_LARGE,
                 detail=error_payload,
             )
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=error_payload,
+        )
+    except UserError as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"code": e.code, "message": e.message},
         )
 
 
@@ -60,9 +75,17 @@ async def upload_document(
 async def get_document_status(
     document_id: uuid.UUID,
     use_case: Any = Depends(_get_status_use_case),
+    token: str = Depends(get_bearer_token),
+    auth_use_case: GetCurrentUserUseCase = Depends(_get_current_user_use_case),
 ) -> DocumentStatusResponse:
     """Get the processing status of a study document."""
     try:
-        return await use_case.execute(document_id=document_id)
+        user = await auth_use_case.execute(token=token)
+        return await use_case.execute(document_id=document_id, owner_id=user.id)
     except StudyDocumentError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
+    except UserError as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"code": e.code, "message": e.message},
+        )

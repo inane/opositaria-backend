@@ -21,6 +21,7 @@ class SemanticSearchUseCase:
         self,
         query_text: str,
         limit: int | None = None,
+        owner_id: str | None = None,
     ) -> SemanticSearchResponse:
         query = SemanticQuery(query_text)
         search_limit = SearchLimit(limit) if limit is not None else SearchLimit()
@@ -34,6 +35,7 @@ class SemanticSearchUseCase:
         results = await self._search_repository.find_nearest_by_embedding(
             embedding=embedding,
             limit=search_limit.value,
+            owner_id=owner_id,
         )
         return SemanticSearchResponse(
             query=query.text,

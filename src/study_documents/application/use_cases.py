@@ -42,6 +42,7 @@ class UploadStudyDocumentUseCase:
         filename: str,
         content_type: str,
         content: bytes,
+        owner_user_id: uuid.UUID | None = None,
     ) -> UploadDocumentResponse:
         """Upload a PDF study document."""
         if not content:
@@ -62,6 +63,7 @@ class UploadStudyDocumentUseCase:
             filename=filename,
             content_type=content_type,
             storage_path="",
+            owner_user_id=owner_user_id,
         )
 
         storage_path = await self._document_storage.save(document_id, filename, content)
@@ -94,9 +96,14 @@ class GetStudyDocumentStatusUseCase:
     ) -> None:
         self._document_repository = document_repository
 
-    async def execute(self, document_id: uuid.UUID) -> DocumentStatusResponse:
+    async def execute(
+        self, document_id: uuid.UUID, owner_id: uuid.UUID | None = None
+    ) -> DocumentStatusResponse:
         """Get the status of a study document."""
-        doc = await self._document_repository.find_by_id(document_id)
+        if owner_id is not None:
+            doc = await self._document_repository.find_by_id_and_owner(document_id, owner_id)
+        else:
+            doc = await self._document_repository.find_by_id(document_id)
         if doc is None:
             raise StudyDocumentError("Document not found", safe=True)
         return DocumentStatusResponse(

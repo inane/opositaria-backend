@@ -8,28 +8,27 @@
 
 ## Quick Start
 
-### 1. Start Infrastructure
+### 1. Start local infrastructure and worker
 
 ```bash
-# Start PostgreSQL (with pgvector) and RabbitMQ
+# Start PostgreSQL, RabbitMQ, and the worker
 docker compose up -d
 
-# Verify both services are healthy
+# Verify services are healthy/running
 docker compose ps
 ```
 
-### 2. Run Database Migrations
+This starts:
 
-```bash
-uv run alembic upgrade head
-```
+- `postgres`: PostgreSQL with pgvector on `localhost:5433`
+- `rabbitmq`: RabbitMQ on `localhost:5673` and management UI on `localhost:15673`
+- `worker`: RabbitMQ consumer for asynchronous document processing
 
-This applies three migrations:
-1. Enables the `vector` extension (pgvector)
-2. Creates `study_documents`, `study_document_chunks`, and `document_processing_jobs` tables
-3. Creates an HNSW cosine vector index on chunk embeddings
+The worker mounts the local `./data/documents` directory at
+`/app/data/documents`, so PDFs uploaded by the local API are readable by the
+worker container.
 
-### 3. Install Dependencies
+### 2. Install Dependencies
 
 ```bash
 # Core dependencies
@@ -39,17 +38,56 @@ uv sync
 uv sync --extra ml
 ```
 
-### 4. Start the API
+### 3. Start the API locally
 
 ```bash
 uv run uvicorn src.main:app --reload --port 8000
 ```
 
-### 5. Start the Worker (separate terminal)
+This is the recommended development flow: edit code locally, keep FastAPI on
+`--reload`, and let Docker run PostgreSQL, RabbitMQ, and the worker.
+
+Run migrations from your host when the schema changes:
+
+```bash
+uv run alembic upgrade head
+```
+
+Alternatively, run the one-shot migration container:
+
+```bash
+docker compose --profile migrate up migrate
+```
+
+### 4. Optional: start only infrastructure
+
+If you want to run both API and worker manually on your host, start only
+PostgreSQL and RabbitMQ:
+
+```bash
+docker compose up -d postgres rabbitmq
+uv run alembic upgrade head
+```
+
+Then run the worker manually in a separate terminal:
 
 ```bash
 uv run python -m src.document_processing.infrastructure.worker_entrypoint
 ```
+
+### 5. Optional: run the API in Docker
+
+The API container is available behind the `api` Compose profile:
+
+```bash
+docker compose --profile api up -d --build
+```
+
+This starts the `opositaria-api` container on `localhost:8000`. For day-to-day
+local development, prefer the local `uvicorn --reload` command above.
+
+The migrations prepare the database schema, including pgvector, users, study
+documents, document processing jobs, semantic-search chunks, and study spaces.
 
 ## API Endpoints
 

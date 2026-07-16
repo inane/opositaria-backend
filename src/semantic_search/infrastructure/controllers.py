@@ -6,6 +6,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from src.semantic_search.application.dtos import SemanticSearchResponse
 from src.semantic_search.domain.value_objects import SemanticSearchError
+from src.users.application.use_cases import GetCurrentUserUseCase
+from src.users.domain.entities import UserError
+from src.users.infrastructure.controllers import (
+    _get_current_user_use_case,
+    get_bearer_token,
+)
 
 router = APIRouter(prefix="/semantic-search", tags=["semantic-search"])
 
@@ -21,11 +27,26 @@ async def search_documents(
     limit: int | None = Query(
         None, ge=1, le=50, description="Maximum number of results"
     ),
+    token: str = Depends(get_bearer_token),
+    auth_use_case: GetCurrentUserUseCase = Depends(_get_current_user_use_case),
     use_case: Any = Depends(_get_search_use_case),
 ) -> SemanticSearchResponse:
-    """Search processed study documents semantically."""
+    """Search processed study documents semantically.
+
+    Results are scoped to the authenticated user's owned documents.
+    """
     try:
-        return await use_case.execute(query_text=query, limit=limit)
+        user = await auth_use_case.execute(token=token)
+        return await use_case.execute(
+            query_text=query,
+            limit=limit,
+            owner_id=str(user.id),
+        )
+    except UserError as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"code": e.code, "message": e.message},
+        )
     except SemanticSearchError as e:
         status_code = (
             status.HTTP_503_SERVICE_UNAVAILABLE

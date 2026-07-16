@@ -65,20 +65,23 @@ class TestUploadStudyDocumentUseCase:
             job_repository=job_repo,
         )
 
+        owner_id = uuid.uuid4()
         response = await use_case.execute(
             filename="test.pdf",
             content_type="application/pdf",
             content=b"%PDF-1.4 test content",
+            owner_user_id=owner_id,
         )
 
         assert isinstance(response, UploadDocumentResponse)
         assert response.status == "PENDING_PROCESSING"
 
-        # Document was persisted
+        # Document was persisted with owner
         doc = await doc_repo.find_by_id(response.document_id)
         assert doc is not None
         assert doc.filename == "test.pdf"
         assert doc.status == "PENDING_PROCESSING"
+        assert doc.owner_user_id == owner_id
 
         # File was stored
         assert len(storage.saved) == 1
@@ -116,6 +119,7 @@ class TestUploadStudyDocumentUseCase:
                 filename="notes.txt",
                 content_type="text/plain",
                 content=b"not a pdf",
+                owner_user_id=uuid.uuid4(),
             )
 
         assert exc.value.code == "invalid_file_type"
@@ -143,6 +147,7 @@ class TestUploadStudyDocumentUseCase:
                 filename="../test.pdf",
                 content_type="application/pdf",
                 content=b"%PDF-1.4 some content",
+                owner_user_id=uuid.uuid4(),
             )
 
         assert exc.value.code == "invalid_filename"
@@ -168,6 +173,7 @@ class TestUploadStudyDocumentUseCase:
                 filename="empty.pdf",
                 content_type="application/pdf",
                 content=b"",
+                owner_user_id=uuid.uuid4(),
             )
 
         assert exc.value.code == "empty_upload"
@@ -195,6 +201,7 @@ class TestUploadStudyDocumentUseCase:
                 filename="large.pdf",
                 content_type="application/pdf",
                 content=oversized_content,
+                owner_user_id=uuid.uuid4(),
             )
 
         assert exc.value.code == "file_too_large"
@@ -221,6 +228,7 @@ class TestUploadStudyDocumentUseCase:
             filename="max-size.pdf",
             content_type="application/pdf",
             content=max_content,
+            owner_user_id=uuid.uuid4(),
         )
 
         assert response.status == "PENDING_PROCESSING"
@@ -248,6 +256,7 @@ class TestUploadStudyDocumentUseCase:
                 filename="test.pdf",
                 content_type="application/pdf",
                 content=b"%PDF-1.4 valid content",
+                owner_user_id=uuid.uuid4(),
             )
 
         # File was stored before publish attempt
@@ -286,6 +295,7 @@ class TestUploadRegressionBehavior:
                     filename=filename,
                     content_type=content_type,
                     content=content,
+                    owner_user_id=uuid.uuid4(),
                 )
 
             # No document was created
@@ -314,6 +324,7 @@ class TestGetStudyDocumentStatusUseCase:
             filename="test.pdf",
             content_type="application/pdf",
             storage_path="study_documents/test.pdf",
+            owner_user_id=uuid.uuid4(),
         )
         await doc_repo.save(doc)
 
@@ -332,6 +343,7 @@ class TestGetStudyDocumentStatusUseCase:
             filename="test.pdf",
             content_type="application/pdf",
             storage_path="study_documents/test.pdf",
+            owner_user_id=uuid.uuid4(),
         )
         doc.mark_as_processing()
         doc.mark_as_ready(chunk_count=5)
@@ -354,6 +366,7 @@ class TestGetStudyDocumentStatusUseCase:
             filename="test.pdf",
             content_type="application/pdf",
             storage_path="study_documents/test.pdf",
+            owner_user_id=uuid.uuid4(),
         )
         doc.mark_as_failed(failure_reason="no_extractable_text")
         await doc_repo.save(doc)
@@ -373,6 +386,7 @@ class TestGetStudyDocumentStatusUseCase:
             filename="test.pdf",
             content_type="application/pdf",
             storage_path="study_documents/test.pdf",
+            owner_user_id=uuid.uuid4(),
         )
         doc.mark_as_failed(failure_reason="pdf_cannot_be_read")
         await doc_repo.save(doc)
@@ -392,6 +406,7 @@ class TestGetStudyDocumentStatusUseCase:
             filename="test.pdf",
             content_type="application/pdf",
             storage_path="study_documents/test.pdf",
+            owner_user_id=uuid.uuid4(),
         )
         doc.mark_as_failed(failure_reason="encrypted_pdf")
         await doc_repo.save(doc)
@@ -409,3 +424,41 @@ class TestGetStudyDocumentStatusUseCase:
 
         with pytest.raises(StudyDocumentError, match="Document not found"):
             await use_case.execute(uuid.uuid4())
+
+    @pytest.mark.asyncio
+    async def test_returns_status_for_owned_document(self) -> None:
+        """An owner can read the status of their own document."""
+        doc_repo = InMemoryStudyDocumentRepository()
+        use_case = GetStudyDocumentStatusUseCase(document_repository=doc_repo)
+        owner_id = uuid.uuid4()
+        doc = StudyDocument.create(
+            id=uuid.uuid4(),
+            filename="test.pdf",
+            content_type="application/pdf",
+            storage_path="study_documents/test.pdf",
+            owner_user_id=owner_id,
+        )
+        await doc_repo.save(doc)
+
+        response = await use_case.execute(doc.id, owner_id=owner_id)
+
+        assert response.status == "PENDING_PROCESSING"
+
+    @pytest.mark.asyncio
+    async def test_returns_not_found_for_foreign_document(self) -> None:
+        """A different user cannot read the status of another user's document."""
+        doc_repo = InMemoryStudyDocumentRepository()
+        use_case = GetStudyDocumentStatusUseCase(document_repository=doc_repo)
+        owner_id = uuid.uuid4()
+        other_owner_id = uuid.uuid4()
+        doc = StudyDocument.create(
+            id=uuid.uuid4(),
+            filename="test.pdf",
+            content_type="application/pdf",
+            storage_path="study_documents/test.pdf",
+            owner_user_id=owner_id,
+        )
+        await doc_repo.save(doc)
+
+        with pytest.raises(StudyDocumentError, match="Document not found"):
+            await use_case.execute(doc.id, owner_id=other_owner_id)
