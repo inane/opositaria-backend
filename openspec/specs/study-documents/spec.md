@@ -136,3 +136,16 @@ The system SHALL fail processing for PDFs that do not yield usable selectable te
 - **AND** the system SHALL store a safe failure reason associated with code `no_extractable_text`
 - **AND** safe failure reasons SHALL be user-safe messages that do not expose stack traces, filesystem paths, model internals, broker connection details, or raw infrastructure exception text
 - **AND** the system SHALL NOT attempt OCR
+
+### Requirement: Scope study documents by authenticated owner
+The system SHALL associate uploaded study documents with the authenticated user and prevent cross-user access.
+
+#### Scenario: Uploaded document records owner
+- **GIVEN** an authenticated user uploads a valid PDF study document
+- **WHEN** the system persists the study document
+- **THEN** the document SHALL store the authenticated user's identifier as owner metadata
+
+#### Scenario: Foreign document status is hidden
+- **GIVEN** a study document exists for another user
+- **WHEN** an authenticated user asks for that document status
+- **THEN** the system SHALL return a not found error

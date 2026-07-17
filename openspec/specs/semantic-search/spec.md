@@ -80,3 +80,17 @@ The system SHALL return a safe error when semantic search cannot generate a quer
 - **THEN** the system SHALL return a safe service error
 - **AND** the system SHALL NOT expose internal stack traces, model paths, or provider details
 - **AND** the HTTP API SHALL map query embedding generation failures to a safe `5xx` service error response without exposing stack traces, model paths, or provider details
+
+### Requirement: Scope semantic search to authenticated owner
+The system SHALL return semantic search results only from documents owned by the authenticated user.
+
+#### Scenario: Search excludes foreign ready documents
+- **GIVEN** ready study documents with chunk embeddings exist for multiple users
+- **WHEN** an authenticated user submits a semantic search query
+- **THEN** the system SHALL return only chunks whose parent document is owned by that user
+- **AND** the system SHALL NOT return chunks from another user's ready documents
+
+#### Scenario: Semantic search requires authentication
+- **GIVEN** a request has no valid bearer token
+- **WHEN** the request submits a semantic search query
+- **THEN** the system SHALL reject the request with `401 Unauthorized`
