@@ -24,9 +24,9 @@ class PostgresStudyDocumentRepository:
         """Persist a study document (upsert)."""
         await self._session.execute(
             text("""
-                INSERT INTO study_documents (id, filename, content_type, storage_path, owner_user_id, status,
+                INSERT INTO study_documents (id, filename, content_type, storage_path, owner_user_id, study_space_id, status,
                     failure_reason, chunks_count, created_at, updated_at, processed_at)
-                VALUES (:id, :filename, :content_type, :storage_path, :owner_user_id, :status,
+                VALUES (:id, :filename, :content_type, :storage_path, :owner_user_id, :study_space_id, :status,
                     :failure_reason, :chunks_count, :created_at, :updated_at, :processed_at)
                 ON CONFLICT (id) DO UPDATE SET
                     filename = EXCLUDED.filename,
@@ -36,7 +36,8 @@ class PostgresStudyDocumentRepository:
                     failure_reason = EXCLUDED.failure_reason,
                     chunks_count = EXCLUDED.chunks_count,
                     updated_at = EXCLUDED.updated_at,
-                    processed_at = EXCLUDED.processed_at
+                    processed_at = EXCLUDED.processed_at,
+                    study_space_id = EXCLUDED.study_space_id
             """),
             {
                 "id": document.id,
@@ -44,6 +45,7 @@ class PostgresStudyDocumentRepository:
                 "content_type": document.content_type,
                 "storage_path": document.storage_path,
                 "owner_user_id": document.owner_user_id,
+                "study_space_id": document.study_space_id,
                 "status": document.status,
                 "failure_reason": document.failure_reason,
                 "chunks_count": document.chunks_count,
@@ -61,19 +63,7 @@ class PostgresStudyDocumentRepository:
         model = result.scalar_one_or_none()
         if model is None:
             return None
-        return StudyDocument(
-            id=model.id,
-            filename=model.filename,
-            content_type=model.content_type,
-            storage_path=model.storage_path,
-            owner_user_id=model.owner_user_id,
-            status=model.status,
-            failure_reason=model.failure_reason,
-            chunks_count=model.chunks_count,
-            created_at=model.created_at,
-            updated_at=model.updated_at,
-            processed_at=model.processed_at,
-        )
+        return self._to_domain(model)
 
     async def find_by_id_and_owner(
         self, document_id: uuid.UUID, owner_id: uuid.UUID
@@ -88,12 +78,31 @@ class PostgresStudyDocumentRepository:
         model = result.scalar_one_or_none()
         if model is None:
             return None
+        return self._to_domain(model)
+
+    async def find_by_study_space_id_and_owner(
+        self, study_space_id: uuid.UUID, owner_id: uuid.UUID
+    ) -> list[StudyDocument]:
+        """Find all documents in a study space owned by the given user."""
+        result = await self._session.execute(
+            select(StudyDocumentModel).where(
+                StudyDocumentModel.study_space_id == study_space_id,
+                StudyDocumentModel.owner_user_id == owner_id,
+            )
+        )
+        models = result.scalars().all()
+        return [self._to_domain(m) for m in models]
+
+    @staticmethod
+    def _to_domain(model: StudyDocumentModel) -> StudyDocument:
+        """Map ORM model to domain entity."""
         return StudyDocument(
             id=model.id,
             filename=model.filename,
             content_type=model.content_type,
             storage_path=model.storage_path,
             owner_user_id=model.owner_user_id,
+            study_space_id=model.study_space_id,
             status=model.status,
             failure_reason=model.failure_reason,
             chunks_count=model.chunks_count,
@@ -193,33 +202,42 @@ class PostgresSemanticChunkSearchRepository:
         self._session = session
 
     async def find_nearest_by_embedding(
-        self, embedding: list[float], limit: int, owner_id: uuid.UUID | None = None
+        self,
+        embedding: list[float],
+        limit: int,
+        owner_id: uuid.UUID | None = None,
+        study_space_id: uuid.UUID | None = None,
     ) -> list[ChunkSearchResult]:
         """Find the nearest chunks by cosine similarity, limited to READY documents.
 
         When owner_id is provided, only chunks from documents owned by that user are returned.
+        When study_space_id is provided, only chunks from documents in that study space are returned.
         """
         vector_literal = "[" + ",".join(str(v) for v in embedding) + "]"
-        owner_filter = "AND d.owner_user_id = :owner_id" if owner_id else ""
+        filters: list[str] = ["d.status = 'READY'"]
+        params: dict[str, Any] = {"embedding": vector_literal, "limit": limit}
+        if owner_id:
+            filters.append("d.owner_user_id = :owner_id")
+            params["owner_id"] = owner_id
+        if study_space_id:
+            filters.append("d.study_space_id = :study_space_id")
+            params["study_space_id"] = study_space_id
+        where_clause = " AND ".join(filters)
         query = text(f"""
             SELECT
                 c.id AS chunk_id,
                 c.document_id AS document_id,
                 c.text AS text,
-                1 - (c.embedding <=> '{vector_literal}') AS score,
+                1 - (c.embedding <=> CAST(:embedding AS vector)) AS score,
                 c.sequence_number AS sequence_number,
                 c.page_number AS page_number,
                 d.filename AS document_filename
             FROM study_document_chunks c
             JOIN study_documents d ON d.id = c.document_id
-            WHERE d.status = 'READY'
-            {owner_filter}
-            ORDER BY c.embedding <=> '{vector_literal}'
+            WHERE {where_clause}
+            ORDER BY c.embedding <=> CAST(:embedding AS vector)
             LIMIT :limit
         """)
-        params: dict[str, Any] = {"limit": limit}
-        if owner_id:
-            params["owner_id"] = owner_id
         result = await self._session.execute(query, params)
         rows = result.fetchall()
         return [

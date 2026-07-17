@@ -92,6 +92,7 @@ class StudyDocument:
     content_type: str
     storage_path: str
     owner_user_id: uuid.UUID | None = None
+    study_space_id: uuid.UUID | None = None
     status: str = "PENDING_PROCESSING"
     failure_reason: str | None = None
     chunks_count: int = 0
@@ -115,6 +116,7 @@ class StudyDocument:
         content_type: str,
         storage_path: str,
         owner_user_id: uuid.UUID | None = None,
+        study_space_id: uuid.UUID | None = None,
     ) -> "StudyDocument":
         """Create a validated StudyDocument.
 
@@ -131,6 +133,12 @@ class StudyDocument:
                 "Document owner is required",
                 safe=True,
                 code="missing_owner",
+            )
+        if study_space_id is None:
+            raise StudyDocumentError(
+                "Document study space is required",
+                safe=True,
+                code="missing_study_space",
             )
         if filename in RESERVED_FILENAMES:
             raise StudyDocumentError(
@@ -174,6 +182,7 @@ class StudyDocument:
             content_type=content_type,
             storage_path=storage_path,
             owner_user_id=owner_user_id,
+            study_space_id=study_space_id,
         )
 
     def mark_as_processing(self) -> None:

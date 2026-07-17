@@ -9,10 +9,6 @@ from src.document_processing.domain.repositories import (
     InMemoryDocumentProcessingJobRepository,
 )
 from src.shared.infrastructure.factory import create_app
-from src.study_documents.application.ports import (
-    DocumentStorage,
-    ProcessingRequestPublisher,
-)
 from src.study_documents.application.use_cases import (
     GetStudyDocumentStatusUseCase,
     UploadStudyDocumentUseCase,
@@ -21,6 +17,15 @@ from src.study_documents.domain.repositories import InMemoryStudyDocumentReposit
 from src.study_documents.infrastructure.controllers import (
     _get_status_use_case,
     _get_upload_use_case,
+)
+from src.study_spaces.application.use_cases import (
+    ListStudySpaceDocumentsUseCase,
+    ListStudySpacesUseCase,
+)
+from src.study_spaces.domain.repositories import InMemoryStudySpaceRepository
+from src.study_spaces.infrastructure.controllers import (
+    _get_list_space_documents_use_case,
+    _get_list_spaces_use_case,
 )
 from src.users.infrastructure.controllers import (
     _get_current_user_use_case,
@@ -55,7 +60,7 @@ class PublisherStub:
 
 def create_inmemory_app(
     authenticated: bool = False,
-) -> tuple[FastAPI, InMemoryStudyDocumentRepository]:
+) -> tuple[FastAPI, InMemoryStudyDocumentRepository, InMemoryStudySpaceRepository]:
     """Create a test app with InMemory repositories and stubs.
 
     If authenticated=True, the app accepts any bearer token and resolves
@@ -64,6 +69,7 @@ def create_inmemory_app(
     app = create_app()
     doc_repo = InMemoryStudyDocumentRepository()
     job_repo = InMemoryDocumentProcessingJobRepository()
+    space_repo = InMemoryStudySpaceRepository()
     storage = DocumentStorageStub()
     publisher = PublisherStub()
 
@@ -73,6 +79,7 @@ def create_inmemory_app(
             document_storage=storage,
             publisher=publisher,
             job_repository=job_repo,
+            space_repository=space_repo,
         )
 
     async def override_status_use_case() -> GetStudyDocumentStatusUseCase:
@@ -80,6 +87,18 @@ def create_inmemory_app(
 
     app.dependency_overrides[_get_upload_use_case] = override_upload_use_case
     app.dependency_overrides[_get_status_use_case] = override_status_use_case
+
+    async def override_list_spaces_use_case() -> ListStudySpacesUseCase:
+        return ListStudySpacesUseCase(space_repository=space_repo)
+
+    async def override_list_space_docs_use_case() -> ListStudySpaceDocumentsUseCase:
+        return ListStudySpaceDocumentsUseCase(
+            space_repository=space_repo,
+            document_repository=doc_repo,
+        )
+
+    app.dependency_overrides[_get_list_spaces_use_case] = override_list_spaces_use_case
+    app.dependency_overrides[_get_list_space_documents_use_case] = override_list_space_docs_use_case
 
     if authenticated:
         user = User(id=OWNER_ID, email="test@example.com", password_hash="hash")
@@ -97,4 +116,4 @@ def create_inmemory_app(
         app.dependency_overrides[get_bearer_token] = override_get_bearer_token
         app.dependency_overrides[_get_current_user_use_case] = override_get_current_user
 
-    return app, doc_repo
+    return app, doc_repo, space_repo

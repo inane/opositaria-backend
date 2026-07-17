@@ -56,11 +56,14 @@ from src.users.infrastructure.repositories import PostgresUserRepository
 from src.users.infrastructure.security import BcryptPasswordHasher, JwtTokenService
 from src.study_spaces.application.use_cases import (
     CreateStudySpaceUseCase,
+    ListStudySpaceDocumentsUseCase,
     ListStudySpacesUseCase,
 )
 from src.study_spaces.infrastructure.controllers import (
     _get_create_space_use_case,
+    _get_list_space_documents_use_case,
     _get_list_spaces_use_case,
+    _get_search_use_case as _get_space_search_use_case,
     router as study_spaces_router,
 )
 from src.study_spaces.infrastructure.repositories import (
@@ -99,12 +102,14 @@ def create_app() -> FastAPI:
     ) -> UploadStudyDocumentUseCase:
         doc_repo = PostgresStudyDocumentRepository(session)
         job_repo = PostgresDocumentProcessingJobRepository(session)
+        space_repo = PostgresStudySpaceRepository(session)
         storage = LocalDocumentStorage()
         return UploadStudyDocumentUseCase(
             document_repository=doc_repo,
             document_storage=storage,
             publisher=publisher,
             job_repository=job_repo,
+            space_repository=space_repo,
         )
 
     async def create_status_use_case(
@@ -117,15 +122,18 @@ def create_app() -> FastAPI:
         session: AsyncSession = Depends(get_db),
     ) -> SemanticSearchUseCase:
         search_repo = PostgresSemanticChunkSearchRepository(session)
+        space_repo = PostgresStudySpaceRepository(session)
         embedding_generator = NumpyEmbeddingGenerator()
         return SemanticSearchUseCase(
             search_repository=search_repo,
             embedding_generator=embedding_generator,
+            space_repository=space_repo,
         )
 
     app.dependency_overrides[_get_upload_use_case] = create_upload_use_case
     app.dependency_overrides[_get_status_use_case] = create_status_use_case
     app.dependency_overrides[_get_search_use_case] = create_search_use_case
+    app.dependency_overrides[_get_space_search_use_case] = create_search_use_case
 
     async def create_register_use_case(
         session: AsyncSession = Depends(get_db),
@@ -176,8 +184,21 @@ def create_app() -> FastAPI:
         space_repo = PostgresStudySpaceRepository(session)
         return ListStudySpacesUseCase(space_repository=space_repo)
 
+    async def create_list_space_documents_use_case(
+        session: AsyncSession = Depends(get_db),
+    ) -> ListStudySpaceDocumentsUseCase:
+        doc_repo = PostgresStudyDocumentRepository(session)
+        space_repo = PostgresStudySpaceRepository(session)
+        return ListStudySpaceDocumentsUseCase(
+            space_repository=space_repo,
+            document_repository=doc_repo,
+        )
+
     app.dependency_overrides[_get_create_space_use_case] = create_create_space_use_case
     app.dependency_overrides[_get_list_spaces_use_case] = create_list_spaces_use_case
+    app.dependency_overrides[_get_list_space_documents_use_case] = (
+        create_list_space_documents_use_case
+    )
 
     app.include_router(study_documents_router)
     app.include_router(semantic_search_router)

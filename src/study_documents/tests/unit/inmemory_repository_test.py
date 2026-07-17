@@ -23,7 +23,8 @@ class TestInMemoryStudyDocumentRepository:
             filename="test.pdf",
             content_type="application/pdf",
             storage_path="study_documents/test.pdf",
-        owner_user_id=uuid.uuid4(),
+            owner_user_id=uuid.uuid4(),
+            study_space_id=uuid.uuid4(),
         )
 
         await repo.save(doc)
@@ -53,6 +54,7 @@ class TestInMemoryStudyDocumentRepository:
             content_type="application/pdf",
             storage_path="study_documents/test.pdf",
             owner_user_id=owner_id,
+            study_space_id=uuid.uuid4(),
         )
 
         await repo.save(doc)
@@ -73,6 +75,7 @@ class TestInMemoryStudyDocumentRepository:
             content_type="application/pdf",
             storage_path="study_documents/test.pdf",
             owner_user_id=owner_id,
+            study_space_id=uuid.uuid4(),
         )
 
         await repo.save(doc)

@@ -13,9 +13,12 @@ class SemanticSearchError(Exception):
     VALIDATION = "validation"
     SERVICE = "service"
 
-    def __init__(self, message: str, error_type: str = VALIDATION) -> None:
+    def __init__(
+        self, message: str, error_type: str = VALIDATION, code: str = ""
+    ) -> None:
         self.message = message
         self.error_type = error_type
+        self.code = code
         super().__init__(message)
 
 

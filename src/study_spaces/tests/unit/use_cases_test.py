@@ -8,6 +8,7 @@ from src.study_documents.domain.entities import StudyDocument
 from src.study_documents.domain.repositories import InMemoryStudyDocumentRepository
 from src.study_spaces.application.use_cases import (
     CreateStudySpaceUseCase,
+    ListStudySpaceDocumentsUseCase,
     ListStudySpacesUseCase,
 )
 from src.study_spaces.domain.entities import StudySpaceError
@@ -29,6 +30,7 @@ class TestCreateStudySpaceUseCase:
             content_type="application/pdf",
             storage_path="study_documents/test.pdf",
             owner_user_id=owner_id,
+            study_space_id=uuid.uuid4(),
         )
         doc.mark_as_processing()
         doc.mark_as_ready(chunk_count=5)
@@ -63,7 +65,9 @@ class TestCreateStudySpaceUseCase:
             space_repository=space_repo,
             document_repository=doc_repo,
         )
-        with pytest.raises(StudySpaceError, match="Study space name must not be blank") as exc:
+        with pytest.raises(
+            StudySpaceError, match="Study space name must not be blank"
+        ) as exc:
             await use_case.execute(
                 owner_id=uuid.uuid4(),
                 name="",
@@ -81,7 +85,9 @@ class TestCreateStudySpaceUseCase:
             space_repository=space_repo,
             document_repository=doc_repo,
         )
-        with pytest.raises(StudySpaceError, match="At least one document is required") as exc:
+        with pytest.raises(
+            StudySpaceError, match="At least one document is required"
+        ) as exc:
             await use_case.execute(
                 owner_id=uuid.uuid4(),
                 name="Test",
@@ -120,6 +126,7 @@ class TestCreateStudySpaceUseCase:
             content_type="application/pdf",
             storage_path="study_documents/test.pdf",
             owner_user_id=other_owner,
+            study_space_id=uuid.uuid4(),
         )
         await doc_repo.save(doc)
 
@@ -147,6 +154,7 @@ class TestCreateStudySpaceUseCase:
             content_type="application/pdf",
             storage_path="study_documents/test.pdf",
             owner_user_id=owner_id,
+            study_space_id=uuid.uuid4(),
         )
         await doc_repo.save(doc)
 
@@ -174,6 +182,7 @@ class TestCreateStudySpaceUseCase:
             content_type="application/pdf",
             storage_path="study_documents/test.pdf",
             owner_user_id=owner_id,
+            study_space_id=uuid.uuid4(),
         )
         doc.mark_as_failed("Processing error")
         await doc_repo.save(doc)
@@ -202,8 +211,16 @@ class TestListStudySpacesUseCase:
         other_owner = uuid.uuid4()
 
         from src.study_spaces.domain.entities import StudySpace as SS
-        s1 = SS.create(id=uuid.uuid4(), owner_id=owner_id, name="Mine", document_ids=[uuid.uuid4()])
-        s2 = SS.create(id=uuid.uuid4(), owner_id=other_owner, name="Theirs", document_ids=[uuid.uuid4()])
+
+        s1 = SS.create(
+            id=uuid.uuid4(), owner_id=owner_id, name="Mine", document_ids=[uuid.uuid4()]
+        )
+        s2 = SS.create(
+            id=uuid.uuid4(),
+            owner_id=other_owner,
+            name="Theirs",
+            document_ids=[uuid.uuid4()],
+        )
         await space_repo.save(s1)
         await space_repo.save(s2)
 
@@ -223,9 +240,19 @@ class TestListStudySpacesUseCase:
         import datetime
         from datetime import timezone
 
-        s1 = SS.create(id=uuid.uuid4(), owner_id=owner_id, name="First", document_ids=[uuid.uuid4()])
+        s1 = SS.create(
+            id=uuid.uuid4(),
+            owner_id=owner_id,
+            name="First",
+            document_ids=[uuid.uuid4()],
+        )
         s1.created_at = datetime.datetime(2024, 1, 1, tzinfo=timezone.utc)
-        s2 = SS.create(id=uuid.uuid4(), owner_id=owner_id, name="Second", document_ids=[uuid.uuid4()])
+        s2 = SS.create(
+            id=uuid.uuid4(),
+            owner_id=owner_id,
+            name="Second",
+            document_ids=[uuid.uuid4()],
+        )
         s2.created_at = datetime.datetime(2025, 1, 1, tzinfo=timezone.utc)
         await space_repo.save(s1)
         await space_repo.save(s2)
@@ -246,3 +273,109 @@ class TestListStudySpacesUseCase:
         result = await use_case.execute(owner_id=uuid.uuid4())
 
         assert result == []
+
+
+class TestListStudySpaceDocumentsUseCase:
+    """Tests for ListStudySpaceDocumentsUseCase."""
+
+    @pytest.mark.asyncio
+    async def test_returns_documents_in_owned_space(self) -> None:
+        """An owner can list documents in one of their study spaces."""
+        space_repo = InMemoryStudySpaceRepository()
+        doc_repo = InMemoryStudyDocumentRepository()
+        owner_id = uuid.uuid4()
+        space_id = uuid.uuid4()
+
+        from src.study_spaces.domain.entities import StudySpace as SS
+
+        space = SS.create(
+            id=space_id, owner_id=owner_id, name="Test", document_ids=[uuid.uuid4()]
+        )
+        await space_repo.save(space)
+
+        doc = StudyDocument.create(
+            id=uuid.uuid4(),
+            filename="test.pdf",
+            content_type="application/pdf",
+            storage_path="study_documents/test.pdf",
+            owner_user_id=owner_id,
+            study_space_id=space_id,
+        )
+        doc.mark_as_processing()
+        doc.mark_as_ready(chunk_count=3)
+        await doc_repo.save(doc)
+
+        use_case = ListStudySpaceDocumentsUseCase(
+            space_repository=space_repo,
+            document_repository=doc_repo,
+        )
+        result = await use_case.execute(space_id=space_id, owner_id=owner_id)
+
+        assert len(result) == 1
+        assert result[0].filename == "test.pdf"
+        assert result[0].status == "READY"
+        assert result[0].chunks_count == 3
+
+    @pytest.mark.asyncio
+    async def test_returns_empty_list_for_owned_space_without_documents(self) -> None:
+        """An owned space with no matching documents in the doc repo returns an empty list."""
+        space_repo = InMemoryStudySpaceRepository()
+        doc_repo = InMemoryStudyDocumentRepository()
+        owner_id = uuid.uuid4()
+        space_id = uuid.uuid4()
+
+        from src.study_spaces.domain.entities import StudySpace as SS
+
+        space = SS.create(
+            id=space_id, owner_id=owner_id, name="Test", document_ids=[uuid.uuid4()]
+        )
+        await space_repo.save(space)
+
+        use_case = ListStudySpaceDocumentsUseCase(
+            space_repository=space_repo,
+            document_repository=doc_repo,
+        )
+        result = await use_case.execute(space_id=space_id, owner_id=owner_id)
+
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_hides_foreign_space_as_not_found(self) -> None:
+        """A space owned by another user returns space_not_found error."""
+        space_repo = InMemoryStudySpaceRepository()
+        doc_repo = InMemoryStudyDocumentRepository()
+        owner_id = uuid.uuid4()
+        other_owner = uuid.uuid4()
+        space_id = uuid.uuid4()
+
+        from src.study_spaces.domain.entities import StudySpace as SS
+
+        space = SS.create(
+            id=space_id,
+            owner_id=other_owner,
+            name="Theirs",
+            document_ids=[uuid.uuid4()],
+        )
+        await space_repo.save(space)
+
+        use_case = ListStudySpaceDocumentsUseCase(
+            space_repository=space_repo,
+            document_repository=doc_repo,
+        )
+        with pytest.raises(StudySpaceError, match="Study space not found") as exc:
+            await use_case.execute(space_id=space_id, owner_id=owner_id)
+        assert exc.value.code == "space_not_found"
+
+    @pytest.mark.asyncio
+    async def test_returns_not_found_for_missing_space(self) -> None:
+        """A non-existent space returns space_not_found error."""
+        space_repo = InMemoryStudySpaceRepository()
+        doc_repo = InMemoryStudyDocumentRepository()
+
+        use_case = ListStudySpaceDocumentsUseCase(
+            space_repository=space_repo,
+            document_repository=doc_repo,
+        )
+        with pytest.raises(StudySpaceError, match="Study space not found") as exc:
+            await use_case.execute(space_id=uuid.uuid4(), owner_id=uuid.uuid4())
+        assert exc.value.code == "space_not_found"

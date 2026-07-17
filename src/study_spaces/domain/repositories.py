@@ -22,10 +22,18 @@ class StudySpaceRepository(Protocol):
         ...
 
     @abstractmethod
-    async def find_by_owner_id(
-        self, owner_id: uuid.UUID
-    ) -> list[StudySpace]:
+    async def find_by_owner_id(self, owner_id: uuid.UUID) -> list[StudySpace]:
         """Find all study spaces for an owner, newest first."""
+        ...
+
+    @abstractmethod
+    async def find_by_id_and_owner(
+        self, space_id: uuid.UUID, owner_id: uuid.UUID
+    ) -> StudySpace | None:
+        """Find a study space by its identifier and verify ownership.
+
+        Returns None if the space does not exist or does not belong to the owner.
+        """
         ...
 
     async def flush(self) -> None:
@@ -51,13 +59,22 @@ class InMemoryStudySpaceRepository:
         """Find a study space by its identifier."""
         return self._spaces.get(space_id)
 
-    async def find_by_owner_id(
-        self, owner_id: uuid.UUID
-    ) -> list[StudySpace]:
+    async def find_by_owner_id(self, owner_id: uuid.UUID) -> list[StudySpace]:
         """Find all study spaces for an owner, newest first."""
         spaces = [s for s in self._spaces.values() if s.owner_id == owner_id]
         spaces.sort(key=lambda s: s.created_at or datetime.min, reverse=True)
         return spaces
+
+    async def find_by_id_and_owner(
+        self, space_id: uuid.UUID, owner_id: uuid.UUID
+    ) -> StudySpace | None:
+        """Find a study space by its identifier and verify ownership."""
+        space = self._spaces.get(space_id)
+        if space is None:
+            return None
+        if space.owner_id != owner_id:
+            return None
+        return space
 
     async def flush(self) -> None:
         """No-op for in-memory storage."""

@@ -8,7 +8,6 @@ from fastapi import FastAPI, status
 from httpx import ASGITransport, AsyncClient
 
 from src.semantic_search.domain.value_objects import SemanticSearchError
-from src.users.application.use_cases import GetCurrentUserUseCase
 from src.users.domain.entities import User
 
 
@@ -16,9 +15,6 @@ from src.users.domain.entities import User
 def app():
     """Create a minimal FastAPI app with the semantic search router and auth override."""
     from src.semantic_search.infrastructure.controllers import router
-    from src.semantic_search.infrastructure.controllers import (
-        _get_search_use_case,
-    )
     from src.users.infrastructure.controllers import (
         _get_current_user_use_case,
         get_bearer_token,
@@ -36,7 +32,9 @@ def app():
     )
 
     application.dependency_overrides[get_bearer_token] = lambda: "test-token"
-    application.dependency_overrides[_get_current_user_use_case] = lambda: mock_auth_use_case
+    application.dependency_overrides[_get_current_user_use_case] = lambda: (
+        mock_auth_use_case
+    )
 
     return application
 

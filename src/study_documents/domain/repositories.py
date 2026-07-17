@@ -27,6 +27,13 @@ class StudyDocumentRepository(Protocol):
         """Find a study document by its identifier and owner."""
         ...
 
+    @abstractmethod
+    async def find_by_study_space_id_and_owner(
+        self, study_space_id: uuid.UUID, owner_id: uuid.UUID
+    ) -> list[StudyDocument]:
+        """Find all documents in a study space owned by the given user."""
+        ...
+
     async def flush(self) -> None:
         """Flush pending writes to durable storage.
 
@@ -96,6 +103,16 @@ class InMemoryStudyDocumentRepository:
         if doc.owner_user_id != owner_id:
             return None
         return doc
+
+    async def find_by_study_space_id_and_owner(
+        self, study_space_id: uuid.UUID, owner_id: uuid.UUID
+    ) -> list[StudyDocument]:
+        """Find all documents in a study space owned by the given user."""
+        return [
+            d
+            for d in self._documents.values()
+            if d.study_space_id == study_space_id and d.owner_user_id == owner_id
+        ]
 
     async def flush(self) -> None:
         """No-op for in-memory storage."""

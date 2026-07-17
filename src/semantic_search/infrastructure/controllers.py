@@ -40,7 +40,7 @@ async def search_documents(
         return await use_case.execute(
             query_text=query,
             limit=limit,
-            owner_id=str(user.id),
+            owner_id=user.id,
         )
     except UserError as e:
         raise HTTPException(
@@ -51,6 +51,6 @@ async def search_documents(
         status_code = (
             status.HTTP_503_SERVICE_UNAVAILABLE
             if e.error_type == SemanticSearchError.SERVICE
-            else status.HTTP_422_UNPROCESSABLE_ENTITY
+            else status.HTTP_422_UNPROCESSABLE_CONTENT
         )
         raise HTTPException(status_code=status_code, detail=str(e))

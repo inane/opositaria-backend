@@ -1,4 +1,4 @@
-"""Shared fixtures for integration tests against real PostgreSQL."""
+"""Shared fixtures for study_spaces integration tests against real PostgreSQL."""
 
 from collections.abc import AsyncGenerator
 

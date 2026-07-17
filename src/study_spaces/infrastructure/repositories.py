@@ -5,8 +5,7 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.study_spaces.domain.entities import StudySpace
-from src.study_spaces.domain.repositories import StudySpaceRepository
+from src.study_spaces.domain.entities import StudySpace, StudySpaceName
 from src.study_spaces.infrastructure.models import StudySpaceModel
 
 
@@ -37,9 +36,7 @@ class PostgresStudySpaceRepository:
             return None
         return self._to_domain(model)
 
-    async def find_by_owner_id(
-        self, owner_id: uuid.UUID
-    ) -> list[StudySpace]:
+    async def find_by_owner_id(self, owner_id: uuid.UUID) -> list[StudySpace]:
         """Find all study spaces for an owner, newest first."""
         result = await self._session.execute(
             select(StudySpaceModel)
@@ -48,6 +45,21 @@ class PostgresStudySpaceRepository:
         )
         models = result.scalars().all()
         return [self._to_domain(m) for m in models]
+
+    async def find_by_id_and_owner(
+        self, space_id: uuid.UUID, owner_id: uuid.UUID
+    ) -> StudySpace | None:
+        """Find a study space by its identifier and verify ownership."""
+        result = await self._session.execute(
+            select(StudySpaceModel).where(
+                StudySpaceModel.id == space_id,
+                StudySpaceModel.owner_id == owner_id,
+            )
+        )
+        model = result.scalar_one_or_none()
+        if model is None:
+            return None
+        return self._to_domain(model)
 
     async def flush(self) -> None:
         """Flush pending writes to durable storage."""
@@ -63,7 +75,7 @@ class PostgresStudySpaceRepository:
         space = StudySpace(
             id=model.id,
             owner_id=model.owner_id,
-            name=model.name,
+            name=StudySpaceName(value=model.name),
             document_ids=[],
             created_at=model.created_at,
         )

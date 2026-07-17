@@ -10,6 +10,7 @@ class UploadDocumentResponse:
 
     document_id: uuid.UUID
     status: str
+    study_space_id: uuid.UUID
 
 
 @dataclass(frozen=True)

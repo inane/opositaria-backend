@@ -35,7 +35,11 @@ class SearchRepositoryStub:
     results: list[ChunkSearchResult] = field(default_factory=list)
 
     async def find_nearest_by_embedding(
-        self, embedding: list[float], limit: int, owner_id: str | None = None
+        self,
+        embedding: list[float],
+        limit: int,
+        owner_id: uuid.UUID | None = None,
+        study_space_id: uuid.UUID | None = None,
     ) -> list[ChunkSearchResult]:
         return self.results[:limit]
 
@@ -148,3 +152,85 @@ class TestSemanticSearchUseCase:
             SemanticSearchError, match="Search service temporarily unavailable"
         ):
             await use_case.execute(query_text="test")
+
+    @pytest.mark.asyncio
+    async def test_rejects_foreign_study_space(self) -> None:
+        """Searching a foreign study space raises validation error."""
+        from src.study_spaces.domain.repositories import InMemoryStudySpaceRepository
+        from src.study_spaces.domain.entities import StudySpace as SS
+
+        space_repo = InMemoryStudySpaceRepository()
+        owner_id = uuid.uuid4()
+        other_owner = uuid.uuid4()
+        space_id = uuid.uuid4()
+
+        space = SS.create(
+            id=space_id,
+            owner_id=other_owner,
+            name="Theirs",
+            document_ids=[uuid.uuid4()],
+        )
+        await space_repo.save(space)
+
+        use_case = SemanticSearchUseCase(
+            search_repository=SearchRepositoryStub(),
+            embedding_generator=EmbeddingGeneratorStub(),
+            space_repository=space_repo,
+        )
+
+        with pytest.raises(SemanticSearchError, match="Study space not found"):
+            await use_case.execute(
+                query_text="test",
+                owner_id=owner_id,
+                study_space_id=space_id,
+            )
+
+    @pytest.mark.asyncio
+    async def test_rejects_missing_study_space(self) -> None:
+        """Searching a non-existent study space raises validation error."""
+        from src.study_spaces.domain.repositories import InMemoryStudySpaceRepository
+
+        space_repo = InMemoryStudySpaceRepository()
+
+        use_case = SemanticSearchUseCase(
+            search_repository=SearchRepositoryStub(),
+            embedding_generator=EmbeddingGeneratorStub(),
+            space_repository=space_repo,
+        )
+
+        with pytest.raises(SemanticSearchError, match="Study space not found"):
+            await use_case.execute(
+                query_text="test",
+                owner_id=uuid.uuid4(),
+                study_space_id=uuid.uuid4(),
+            )
+
+    @pytest.mark.asyncio
+    async def test_accepts_owned_study_space(self) -> None:
+        """Searching an owned study space succeeds."""
+        from src.study_spaces.domain.repositories import InMemoryStudySpaceRepository
+        from src.study_spaces.domain.entities import StudySpace as SS
+
+        space_repo = InMemoryStudySpaceRepository()
+        owner_id = uuid.uuid4()
+        space_id = uuid.uuid4()
+
+        space = SS.create(
+            id=space_id, owner_id=owner_id, name="Mine", document_ids=[uuid.uuid4()]
+        )
+        await space_repo.save(space)
+
+        use_case = SemanticSearchUseCase(
+            search_repository=SearchRepositoryStub(),
+            embedding_generator=EmbeddingGeneratorStub(),
+            space_repository=space_repo,
+        )
+
+        response = await use_case.execute(
+            query_text="test",
+            owner_id=owner_id,
+            study_space_id=space_id,
+        )
+
+        assert response is not None
+        assert len(response.results) == 0

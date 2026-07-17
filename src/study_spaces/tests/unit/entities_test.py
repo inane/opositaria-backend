@@ -18,11 +18,15 @@ class TestStudySpaceName:
     def test_preserves_whitespace_in_name(self) -> None:
         """A name with surrounding whitespace is preserved as-is."""
         name = StudySpaceName("  Derecho Civil  ")
-        assert str(name) == "  Derecho Civil  "  # frozen=True, no __post_init__ normalization
+        assert (
+            str(name) == "  Derecho Civil  "
+        )  # frozen=True, no __post_init__ normalization
 
     def test_rejects_blank_name(self) -> None:
         """A blank name is rejected with code invalid_name."""
-        with pytest.raises(StudySpaceError, match="Study space name must not be blank") as exc:
+        with pytest.raises(
+            StudySpaceError, match="Study space name must not be blank"
+        ) as exc:
             StudySpaceName("")
         assert exc.value.code == "invalid_name"
 
@@ -57,7 +61,9 @@ class TestStudySpace:
 
     def test_requires_at_least_one_document_id(self) -> None:
         """A study space without document ids is rejected with code empty_documents."""
-        with pytest.raises(StudySpaceError, match="At least one document is required") as exc:
+        with pytest.raises(
+            StudySpaceError, match="At least one document is required"
+        ) as exc:
             StudySpace.create(
                 id=uuid.uuid4(),
                 owner_id=uuid.uuid4(),

@@ -11,6 +11,7 @@ from src.study_documents.application.dtos import (
     UploadError,
 )
 from src.study_documents.domain.entities import StudyDocumentError
+from src.study_spaces.domain.entities import StudySpaceError
 from src.users.domain.entities import UserError
 from src.users.infrastructure.controllers import (
     _get_current_user_use_case,
@@ -38,11 +39,12 @@ async def _get_status_use_case() -> Any:
 )
 async def upload_document(
     file: UploadFile = File(...),
+    study_space_name: str = File(..., description="Name of the study space to create"),
     use_case: Any = Depends(_get_upload_use_case),
     token: str = Depends(get_bearer_token),
     auth_use_case: GetCurrentUserUseCase = Depends(_get_current_user_use_case),
 ) -> UploadDocumentResponse:
-    """Upload a PDF study document for semantic processing."""
+    """Upload a PDF study document and create a study space with the given name."""
     try:
         user = await auth_use_case.execute(token=token)
         content = await file.read()
@@ -51,6 +53,7 @@ async def upload_document(
             content_type=file.content_type or "application/pdf",
             content=content,
             owner_user_id=user.id,
+            study_space_name=study_space_name,
         )
         return response
     except StudyDocumentError as e:
@@ -63,6 +66,16 @@ async def upload_document(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=error_payload,
+        )
+    except StudySpaceError as e:
+        if e.code == "invalid_name":
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail={"code": e.code, "message": e.message},
+            )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": e.code, "message": e.message},
         )
     except UserError as e:
         raise HTTPException(

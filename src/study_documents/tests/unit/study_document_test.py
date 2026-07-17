@@ -11,8 +11,6 @@ TDD case list for authenticated ownership:
 
 import uuid
 
-OWNER_ID = uuid.uuid4()
-
 import pytest
 
 from src.study_documents.domain.entities import (
@@ -20,6 +18,8 @@ from src.study_documents.domain.entities import (
     StudyDocument,
     StudyDocumentError,
 )
+
+OWNER_ID = uuid.uuid4()
 
 
 class TestStudyDocument:
@@ -37,7 +37,8 @@ class TestStudyDocument:
             filename=filename,
             content_type=content_type,
             storage_path=storage_path,
-        owner_user_id=OWNER_ID,
+            owner_user_id=OWNER_ID,
+            study_space_id=uuid.uuid4(),
         )
 
         assert doc.id == doc_id
@@ -60,7 +61,8 @@ class TestStudyDocument:
                 filename="notas.txt",
                 content_type="text/plain",
                 storage_path="study_documents/abc.txt",
-            owner_user_id=OWNER_ID,
+                owner_user_id=OWNER_ID,
+                study_space_id=uuid.uuid4(),
             )
         assert exc.value.code == "invalid_file_type"
 
@@ -76,7 +78,8 @@ class TestStudyDocument:
                 filename="notas.txt",
                 content_type="application/pdf",
                 storage_path="study_documents/abc.txt",
-            owner_user_id=OWNER_ID,
+                owner_user_id=OWNER_ID,
+                study_space_id=uuid.uuid4(),
             )
         assert exc.value.code == "invalid_file_type"
 
@@ -90,7 +93,8 @@ class TestStudyDocument:
                 filename="",
                 content_type="application/pdf",
                 storage_path="study_documents/abc.pdf",
-            owner_user_id=OWNER_ID,
+                owner_user_id=OWNER_ID,
+                study_space_id=uuid.uuid4(),
             )
 
     def test_rejects_dot_filename(self) -> None:
@@ -103,7 +107,8 @@ class TestStudyDocument:
                 filename=".",
                 content_type="application/pdf",
                 storage_path="study_documents/abc.pdf",
-            owner_user_id=OWNER_ID,
+                owner_user_id=OWNER_ID,
+                study_space_id=uuid.uuid4(),
             )
 
     def test_rejects_dot_dot_filename(self) -> None:
@@ -116,7 +121,8 @@ class TestStudyDocument:
                 filename="..",
                 content_type="application/pdf",
                 storage_path="study_documents/abc.pdf",
-            owner_user_id=OWNER_ID,
+                owner_user_id=OWNER_ID,
+                study_space_id=uuid.uuid4(),
             )
 
     def test_rejects_control_characters_in_filename(self) -> None:
@@ -129,7 +135,8 @@ class TestStudyDocument:
                 filename="test\x00.pdf",
                 content_type="application/pdf",
                 storage_path="study_documents/abc.pdf",
-            owner_user_id=OWNER_ID,
+                owner_user_id=OWNER_ID,
+                study_space_id=uuid.uuid4(),
             )
 
     def test_rejects_filename_exceeding_max_length(self) -> None:
@@ -143,7 +150,8 @@ class TestStudyDocument:
                 filename=long_filename,
                 content_type="application/pdf",
                 storage_path="study_documents/abc.pdf",
-            owner_user_id=OWNER_ID,
+                owner_user_id=OWNER_ID,
+                study_space_id=uuid.uuid4(),
             )
 
     def test_preserves_safe_filename_on_document(self) -> None:
@@ -156,7 +164,8 @@ class TestStudyDocument:
             filename=original_filename,
             content_type="application/pdf",
             storage_path="study_documents/doc.pdf",
-        owner_user_id=OWNER_ID,
+            owner_user_id=OWNER_ID,
+            study_space_id=uuid.uuid4(),
         )
 
         assert doc.filename == original_filename
@@ -172,6 +181,7 @@ class TestStudyDocument:
             content_type="application/pdf",
             storage_path="study_documents/test.pdf",
             owner_user_id=owner_id,
+            study_space_id=uuid.uuid4(),
         )
 
         assert doc.owner_user_id == owner_id
@@ -185,6 +195,7 @@ class TestStudyDocument:
             content_type="application/pdf",
             storage_path="study_documents/test.pdf",
             owner_user_id=owner_id,
+            study_space_id=uuid.uuid4(),
         )
 
         assert doc.owner_user_id == owner_id
@@ -197,15 +208,48 @@ class TestStudyDocument:
 
     def test_rejects_document_without_owner(self) -> None:
         """A StudyDocument without an owner_user_id is rejected."""
-        with pytest.raises(StudyDocumentError, match="Document owner is required") as exc:
+        with pytest.raises(
+            StudyDocumentError, match="Document owner is required"
+        ) as exc:
             StudyDocument.create(
                 id=uuid.uuid4(),
                 filename="test.pdf",
                 content_type="application/pdf",
                 storage_path="study_documents/test.pdf",
                 owner_user_id=None,
+                study_space_id=uuid.uuid4(),
             )
         assert exc.value.code == "missing_owner"
+
+    def test_rejects_document_without_study_space(self) -> None:
+        """A StudyDocument without a study_space_id is rejected with code missing_study_space."""
+        with pytest.raises(
+            StudyDocumentError, match="Document study space is required"
+        ) as exc:
+            StudyDocument.create(
+                id=uuid.uuid4(),
+                filename="test.pdf",
+                content_type="application/pdf",
+                storage_path="study_documents/test.pdf",
+                owner_user_id=uuid.uuid4(),
+                study_space_id=None,
+            )
+        assert exc.value.code == "missing_study_space"
+
+    def test_creates_document_with_study_space(self) -> None:
+        """A StudyDocument is created with the study space identifier."""
+        space_id = uuid.uuid4()
+
+        doc = StudyDocument.create(
+            id=uuid.uuid4(),
+            filename="test.pdf",
+            content_type="application/pdf",
+            storage_path="study_documents/test.pdf",
+            owner_user_id=uuid.uuid4(),
+            study_space_id=space_id,
+        )
+
+        assert doc.study_space_id == space_id
 
     def test_rejects_filename_with_path_separator(self) -> None:
         """A filename containing path separators is rejected for security."""
@@ -217,7 +261,8 @@ class TestStudyDocument:
                 filename="../malicious.pdf",
                 content_type="application/pdf",
                 storage_path="study_documents/abc.pdf",
-            owner_user_id=OWNER_ID,
+                owner_user_id=OWNER_ID,
+                study_space_id=uuid.uuid4(),
             )
 
     def test_marks_pending_document_as_processing(self) -> None:
@@ -227,7 +272,8 @@ class TestStudyDocument:
             filename="test.pdf",
             content_type="application/pdf",
             storage_path="study_documents/test.pdf",
-        owner_user_id=OWNER_ID,
+            owner_user_id=OWNER_ID,
+            study_space_id=uuid.uuid4(),
         )
 
         doc.mark_as_processing()
@@ -242,7 +288,8 @@ class TestStudyDocument:
             filename="test.pdf",
             content_type="application/pdf",
             storage_path="study_documents/test.pdf",
-        owner_user_id=OWNER_ID,
+            owner_user_id=OWNER_ID,
+            study_space_id=uuid.uuid4(),
         )
         doc.mark_as_processing()
 
@@ -259,7 +306,8 @@ class TestStudyDocument:
             filename="test.pdf",
             content_type="application/pdf",
             storage_path="study_documents/test.pdf",
-        owner_user_id=OWNER_ID,
+            owner_user_id=OWNER_ID,
+            study_space_id=uuid.uuid4(),
         )
 
         doc.mark_as_failed(failure_reason="No extractable text found")
@@ -274,7 +322,8 @@ class TestStudyDocument:
             filename="test.pdf",
             content_type="application/pdf",
             storage_path="study_documents/test.pdf",
-        owner_user_id=OWNER_ID,
+            owner_user_id=OWNER_ID,
+            study_space_id=uuid.uuid4(),
         )
         doc.mark_as_processing()
 
@@ -290,7 +339,8 @@ class TestStudyDocument:
             filename="test.pdf",
             content_type="application/pdf",
             storage_path="study_documents/test.pdf",
-        owner_user_id=OWNER_ID,
+            owner_user_id=OWNER_ID,
+            study_space_id=uuid.uuid4(),
         )
         doc.mark_as_processing()
         doc.mark_as_ready(chunk_count=3)
@@ -305,7 +355,8 @@ class TestStudyDocument:
             filename="test.pdf",
             content_type="application/pdf",
             storage_path="study_documents/test.pdf",
-        owner_user_id=OWNER_ID,
+            owner_user_id=OWNER_ID,
+            study_space_id=uuid.uuid4(),
         )
         doc.mark_as_processing()
         doc.mark_as_ready(chunk_count=3)
@@ -320,7 +371,8 @@ class TestStudyDocument:
             filename="test.pdf",
             content_type="application/pdf",
             storage_path="study_documents/test.pdf",
-        owner_user_id=OWNER_ID,
+            owner_user_id=OWNER_ID,
+            study_space_id=uuid.uuid4(),
         )
         doc.mark_as_failed(failure_reason="test")
 
